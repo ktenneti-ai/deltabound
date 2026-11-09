@@ -12,7 +12,7 @@ SAMPLES = Path(__file__).parent.parent / "samples"
 
 @lru_cache(maxsize=1)
 def estate() -> Estate:
-    return bods.parse_files(sorted((SAMPLES / "bods").glob("*.xml")))
+    return bods.parse_files(sorted((SAMPLES.parent / "demo" / "sap_bods" / "exports").glob("*.xml")))
 
 
 # ---------- 6a: lineage through pass-through transforms ----------

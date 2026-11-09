@@ -261,8 +261,8 @@ df_STG_ORDERS = spark.read.table("silver.stg.stg_orders")
 ## 9. CLI
 
 ```
-deltabound convert samples/bods --job JOB_SALES_DAILY --out build/JOB_SALES_DAILY [--config convert.toml]
-deltabound convert samples/bods --all --out build/
+deltabound convert demo/sap_bods/exports --job JOB_SALES_DAILY --out build/JOB_SALES_DAILY [--config convert.toml]
+deltabound convert demo/sap_bods/exports --all --out build/
 ```
 
 ## 10. Testing

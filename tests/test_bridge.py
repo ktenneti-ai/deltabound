@@ -13,7 +13,7 @@ from deltabound.parsers import bods
 
 ROOT = Path(__file__).parent.parent
 SAMPLES = ROOT / "samples"
-BODS = sorted((SAMPLES / "bods").glob("*.xml"))
+BODS = sorted((SAMPLES.parent / "demo" / "sap_bods" / "exports").glob("*.xml"))
 
 
 def files(*paths: Path) -> list[tuple[str, bytes]]:
@@ -59,8 +59,8 @@ def test_load_estate_json_including_old_ir_versions():
 
 
 def test_zip_with_folder_and_junk():
-    data = zipped({"export/sales.xml": (SAMPLES / "bods" / "sales.xml").read_bytes(),
-                   "export/shared.xml": (SAMPLES / "bods" / "shared.xml").read_bytes(),
+    data = zipped({"export/sales.xml": (SAMPLES.parent / "demo" / "sap_bods" / "exports" / "sales.xml").read_bytes(),
+                   "export/shared.xml": (SAMPLES.parent / "demo" / "sap_bods" / "exports" / "shared.xml").read_bytes(),
                    "__MACOSX/export/._sales.xml": b"junk", "export/.DS_Store": b"junk"})
     r = bridge.load([("estate.zip", data)])
     st = statuses(r)
@@ -70,7 +70,7 @@ def test_zip_with_folder_and_junk():
 
 
 def test_nested_zip_limit_and_bad_zip():
-    inner = zipped({"a.xml": (SAMPLES / "bods" / "sales.xml").read_bytes()})
+    inner = zipped({"a.xml": (SAMPLES.parent / "demo" / "sap_bods" / "exports" / "sales.xml").read_bytes()})
     deep = zipped({"l2.zip": zipped({"l3.zip": inner})})
     st = statuses(bridge.load([("deep.zip", deep), ("broken.zip", b"PK\x03\x04garbage")]))
     assert st["deep.zip/l2.zip/l3.zip"] == ("zip", "error")
@@ -78,7 +78,7 @@ def test_nested_zip_limit_and_bad_zip():
 
 
 def test_bad_files_are_reported_not_fatal():
-    r = bridge.load(files(SAMPLES / "bods" / "sales.xml") + [
+    r = bridge.load(files(SAMPLES.parent / "demo" / "sap_bods" / "exports" / "sales.xml") + [
         ("broken.xml", b"<DataIntegratorExport><DIJob name='X'>"),
         ("other.xml", b"<catalog/>"),
         ("notes.txt", b"hello"),

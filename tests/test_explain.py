@@ -16,7 +16,7 @@ from deltabound.explain.render import render_text
 from deltabound.ir import Estate
 from deltabound.parsers import bods
 
-ESTATE_DIR = Path(__file__).parent.parent / "samples" / "bods"
+ESTATE_DIR = Path(__file__).parent.parent / "demo" / "sap_bods" / "exports"
 
 
 @lru_cache(maxsize=1)

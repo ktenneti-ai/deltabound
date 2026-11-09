@@ -14,7 +14,7 @@ from deltabound.validate import DuckDBEngine, SparkEngine, load_manifest, run_va
 from .test_convert_spark import spark  # noqa: E402,F401  (shared local Spark session fixture)
 
 ROOT = Path(__file__).parent.parent
-SAMPLE = ROOT / "samples" / "validate" / "JOB_SALES_DAILY"
+SAMPLE = ROOT / "demo" / "sap_bods" / "validation" / "JOB_SALES_DAILY"
 
 
 def summary(run):
@@ -23,7 +23,7 @@ def summary(run):
 
 
 def test_spark_matches_duckdb(spark):  # noqa: F811
-    e = bods.parse_files(sorted((ROOT / "samples" / "bods").glob("*.xml")))
+    e = bods.parse_files(sorted((ROOT / "demo" / "sap_bods" / "exports").glob("*.xml")))
     m = load_manifest(SAMPLE / "validation.toml", SAMPLE / "waivers.toml")
     today = dt.date(2026, 11, 9)
     duck = run_validation(e, m, DuckDBEngine(), today=today)

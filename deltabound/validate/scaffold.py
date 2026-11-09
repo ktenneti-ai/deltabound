@@ -49,7 +49,7 @@ def scaffold(estate: Estate, job: str, cfg: Optional[ConvertConfig] = None, busi
         "# Paths are relative to this file. --engine duckdb reads files; --engine spark also reads tables.",
         f"job = {toml_value(job)}",
         f"business_date = {toml_value(business_date)}",
-        'estate = []  # legacy export files/folders, e.g. ["../samples/bods"]',
+        'estate = []  # legacy export files/folders, e.g. ["../demo/sap_bods/exports"]',
         "",
         "[defaults]  # decided 2026-11-09: exact integers, decimals within 0.005",
         "numeric_abs = 0.005", "numeric_rel = 0.0", "timestamp_seconds = 0", "trim = true",

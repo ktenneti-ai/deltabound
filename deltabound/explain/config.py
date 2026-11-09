@@ -53,6 +53,8 @@ def load_config(path: Optional[Path] = None) -> ExplainConfig:
         cfg = ExplainConfig(**values)
     except ValidationError as e:
         raise ExplainError(f"Invalid [explain] settings: {e}") from e
+    if toml_path.exists() and not Path(cfg.cache_dir).is_absolute():
+        cfg.cache_dir = str(toml_path.resolve().parent / cfg.cache_dir)  # cache lives next to its settings
     if cfg.provider not in PROVIDERS:
         raise ExplainError(f"Unknown provider '{cfg.provider}'. Supported: {', '.join(PROVIDERS)}.")
     return cfg

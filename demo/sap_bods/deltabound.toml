@@ -1,0 +1,47 @@
+# DeltaBound source manifest: everything about one legacy source lives in this folder.
+# Every command accepts the folder:  deltabound summary demo/sap_bods
+#                                    deltabound convert demo/sap_bods --job JOB_SALES_DAILY --out build/
+#                                    deltabound validate run demo/sap_bods --out validation_out/
+
+[source]
+name = "Fernhill Retail: SAP Data Services"
+type = "sap_bods"               # sap_bods | ssis | sql_server
+status = "supported"
+exports = ["exports"]           # repository exports (.xml); ATL text exports are not supported yet
+description = "SYNTHETIC estate of a fictional retailer: 15 jobs, 30 workflows, 60 dataflows."
+input = "SAP Data Services repository exported as XML (Designer: Export > Export to XML file)"
+
+[convert]
+compute = "serverless"          # serverless | job_cluster
+bundle_prefix = "fernhill"
+
+[convert.datastores]            # legacy DATASTORE.OWNER -> Unity Catalog catalog.schema
+"DS_ERP.SAPSR3" = "bronze.sap_erp"
+"DS_POS.POS" = "bronze.pos"
+"DS_POS_OLD.POS" = "bronze.pos_legacy"
+"DS_CRM.LOYALTY" = "bronze.crm"
+"DS_WMS.WMS" = "bronze.wms"
+"DS_DWH.STG" = "silver.stg"
+"DS_DWH.MART" = "gold.mart"
+"DS_DWH.CTL" = "ops.ctl"
+"DS_ARCHIVE.ARCH" = "archive.sales"
+
+[convert.scd]                   # used only where the export does not name SCD2 columns
+valid_from = "VALID_FROM"
+valid_to = "VALID_TO"
+current_flag = "CURRENT_FLAG"
+current_value = "Y"
+open_end = "9999-12-31"
+effective_date = "current_date()"
+
+[explain]
+provider = "anthropic"          # "fake" runs offline with placeholder text
+model = "claude-opus-5-5"
+effort = "high"
+max_tokens = 16000
+fallbacks = true
+redact_literals = false
+cache_dir = ".deltabound/explain"   # relative to this folder
+
+[validate]
+manifests = ["validation/JOB_SALES_DAILY/validation.toml"]

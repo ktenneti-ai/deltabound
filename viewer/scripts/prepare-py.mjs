@@ -3,7 +3,7 @@
 //   public/pyodide/  Pyodide runtime (from node_modules) + pydantic packages (downloaded
 //                    once from the Pyodide CDN, checked against pyodide-lock.json sha256)
 //   public/py/       deltabound wheel (built from ..) + networkx wheel, and manifest.json
-//   public/demo/     the synthetic sample estate (samples/bods/*.xml) and manifest.json
+//   public/demo/     the synthetic sample estate (demo/sap_bods/exports/*.xml) and manifest.json
 // PYTHON env var: interpreter used to build wheels (default ../.venv/bin/python).
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -75,7 +75,7 @@ step(`wheels: ${wheels.join(", ")}`);
 const demoDir = join(pub, "demo");
 rmSync(demoDir, { recursive: true, force: true });
 mkdirSync(demoDir, { recursive: true });
-const samples = join(repo, "samples", "bods");
+const samples = join(repo, "demo", "sap_bods", "exports");
 const demo = readdirSync(samples).filter((f) => f.endsWith(".xml")).sort();
 demo.forEach((f) => copyFileSync(join(samples, f), join(demoDir, f)));
 writeFileSync(join(demoDir, "manifest.json"), JSON.stringify({ files: demo }, null, 2));

@@ -13,7 +13,7 @@ DATAFLOWS = ["DF_FACT_POS_SALES", "DF_FACT_LOYALTY_POINTS"]
 
 
 def fixtures() -> dict[str, str]:
-    files = [(p.name, p.read_bytes()) for p in sorted((ROOT / "samples" / "bods").glob("*.xml"))]
+    files = [(p.name, p.read_bytes()) for p in sorted((ROOT / "demo" / "sap_bods" / "exports").glob("*.xml"))]
     payload = bridge.load(files)
     out = {}
     for df in DATAFLOWS:

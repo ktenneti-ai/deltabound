@@ -1,4 +1,4 @@
-"""Command line: deltabound <command> <export files...>"""
+"""Command line: deltabound <command> <source folder | export files...>"""
 from __future__ import annotations
 
 import argparse
@@ -11,11 +11,33 @@ from .ir import ObjectKind
 from .parsers import bods
 
 
+def _project_manifest(paths: list[str]) -> Path | None:
+    """deltabound.toml when the only path given is a source folder (or its manifest)."""
+    from .project import find_manifest
+
+    return find_manifest(Path(paths[0])) if len(paths) == 1 else None
+
+
 def _load(paths: list[str]):
+    from .project import ProjectError, load_project
+
+    if _project_manifest(paths) is not None:
+        try:
+            return load_project(Path(paths[0])).load_estate()
+        except ProjectError as e:
+            sys.exit(f"deltabound: {e}")
     files: list[Path] = []
     for p in map(Path, paths):
         files += sorted(p.rglob("*.xml")) if p.is_dir() else [p]
     return bods.parse_files(files)
+
+
+def _config(a) -> Path | None:
+    """--config, else the source folder's deltabound.toml, else ./deltabound.toml (handled by loaders)."""
+    if getattr(a, "config", None):
+        return Path(a.config)
+    paths = getattr(a, "paths", None)
+    return _project_manifest(paths) if paths else None
 
 
 def cmd_summary(a) -> None:
@@ -79,10 +101,12 @@ def cmd_convert(a) -> None:
     if unknown:
         sys.exit(f"Not a job in this export: {', '.join(unknown)}")
     try:
-        cfg = load_convert_config(Path(a.config) if a.config else None)
+        cfg = load_convert_config(_config(a))
     except ConvertError as err:
         sys.exit(f"convert: {err}")
     out = Path(a.out)
+    if out.exists() and not out.is_dir():
+        sys.exit(f"convert: --out {out} exists and is not a folder")
     for j in jobs:
         r = convert_job(e, j, cfg)
         base = out / j if a.all else out
@@ -102,12 +126,40 @@ def cmd_validate_scaffold(a) -> None:
     e = _load(a.paths)
     if a.job not in e.objects or e.objects[a.job].kind != ObjectKind.JOB:
         sys.exit(f"Not a job in this export: {a.job}")
-    text = scaffold(e, a.job, load_convert_config(Path(a.config) if a.config else None), a.business_date)
+    text = scaffold(e, a.job, load_convert_config(_config(a)), a.business_date)
     Path(a.out).write_text(text)
     print(f"Wrote {a.out} ({text.count('[[steps]]')} steps). Review keys, ignored columns and paths before running.")
 
 
 def cmd_validate_run(a) -> None:
+    from .project import ProjectError, load_project
+
+    manifest = _project_manifest([a.manifest])
+    if manifest is not None:
+        try:
+            project = load_project(manifest)
+        except ProjectError as e:
+            sys.exit(f"validate: {e}")
+        if not project.validate_manifests:
+            sys.exit(f"validate: {manifest} lists no [validate] manifests")
+        worst = 0
+        for rel in project.validate_manifests:
+            sub = argparse.Namespace(**vars(a))
+            sub.manifest = str(project.base / rel)
+            sub.out = str(Path(a.out) / Path(rel).parent.name)
+            try:
+                _validate_one(sub)
+            except SystemExit as e:
+                worst = max(worst, int(e.code or 0)) if isinstance(e.code, int) or e.code is None else 2
+                if not isinstance(e.code, int) and e.code is not None:
+                    print(e.code, file=sys.stderr)
+        if worst:
+            sys.exit(worst)
+        return
+    _validate_one(a)
+
+
+def _validate_one(a) -> None:
     from .validate import (DuckDBEngine, ValidateError, dumps, load_manifest, render_html, render_markdown,
                            run_validation)
 
@@ -167,7 +219,7 @@ def cmd_explain(a) -> None:
     if unknown:
         sys.exit(f"Not a job in this export: {', '.join(unknown)}")
     try:
-        cfg = load_config(Path(a.config) if a.config else None)
+        cfg = load_config(_config(a))
         ex = Explainer(e, cfg, dry_run=a.dry_run)
         if a.dry_run:
             for j in jobs:

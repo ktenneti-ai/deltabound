@@ -121,7 +121,7 @@ LLM only on an explicit `explain` command.
 - Cache files: `.deltabound/explain/dataflows/<hash>.json` and
   `.deltabound/explain/jobs/<JOB>.json`. A cache entry is reused while
   `context_hash` matches, and `--refresh` forces a new call.
-- `deltabound explain samples/bods --job JOB_SALES_DAILY [--all] [--refresh] [--dry-run]`
+- `deltabound explain demo/sap_bods/exports --job JOB_SALES_DAILY [--all] [--refresh] [--dry-run]`
 - `deltabound explain ... --bundle explanations.json` writes one file the viewer
   can load next to `estate.json`.
 
@@ -141,7 +141,7 @@ LLM only on an explicit `explain` command.
 - cache: a hit, a miss after the IR changes, and `--refresh`.
 - config: precedence of file versus environment variables, and a clear error
   for an unknown provider.
-- An end-to-end run with the `fake` provider on `samples/bods`.
+- An end-to-end run with the `fake` provider on `demo/sap_bods/exports`.
 
 ## Decisions
 

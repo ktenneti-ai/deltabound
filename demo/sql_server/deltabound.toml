@@ -1,0 +1,24 @@
+# DeltaBound source manifest for SQL Server Agent jobs and T-SQL. Status: PLANNED (no parser yet).
+# Commands refuse this source with a clear message until the parser exists.
+
+[source]
+name = "SQL Server Agent jobs and T-SQL"
+type = "sql_server"
+status = "planned"
+exports = ["exports"]
+description = "Placeholder. Drop scripted Agent jobs and the T-SQL they run into exports/ when support lands."
+input = "SQL Server Agent job definitions (SSMS: Script Job as > CREATE To) and the stored procedures / T-SQL scripts their steps run (.sql)"
+
+[convert]
+compute = "serverless"
+bundle_prefix = "sqlserver"
+
+[convert.datastores]            # SERVER.DATABASE (or DATABASE) -> Unity Catalog catalog.schema
+
+[explain]
+provider = "anthropic"
+model = "claude-opus-5-5"
+cache_dir = ".deltabound/explain"
+
+[validate]
+manifests = []

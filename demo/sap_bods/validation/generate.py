@@ -2,7 +2,7 @@
 
 legacy/      CSV exports as the legacy job would leave them (';' delimited, text, '' for NULL)
 databricks/  Parquet outputs of the converted pipeline
-Run: .venv/bin/python samples/validate/generate.py   (needs duckdb)
+Run: .venv/bin/python demo/sap_bods/validation/generate.py   (needs duckdb)
 """
 from pathlib import Path
 

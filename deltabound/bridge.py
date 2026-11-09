@@ -81,6 +81,8 @@ def detect(name: str, data: bytes) -> tuple[str, str]:
         return "unknown", f"XML with unrecognised root <{local}>"
     if name.lower().endswith(ATL_SUFFIX):
         return "atl", ""
+    if name.lower().endswith(".toml"):
+        return "source_manifest", ""
     return "unknown", "not JSON, XML or zip"
 
 
@@ -98,6 +100,9 @@ def load(files: list[tuple[str, bytes]]) -> dict:
             explanation_docs.append((name, data))
         elif fmt == "ssis":
             rep.append(_entry(name, "ssis", "unsupported", "SSIS packages are recognised; SSIS support is planned."))
+        elif fmt == "source_manifest":
+            rep.append(_entry(name, "source_manifest", "skipped",
+                              "source manifest: its settings are used by the command line; the viewer reads the export files"))
         elif fmt == "atl":
             rep.append(_entry(name, "atl", "unsupported",
                               "BODS ATL text exports are not supported yet; export the repository as XML."))

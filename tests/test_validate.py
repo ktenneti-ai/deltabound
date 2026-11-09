@@ -17,13 +17,13 @@ from deltabound.validate.engines import classify  # noqa: E402
 from deltabound.validate.manifest import Source  # noqa: E402
 
 ROOT = Path(__file__).parent.parent
-SAMPLE = ROOT / "samples" / "validate" / "JOB_SALES_DAILY"
+SAMPLE = ROOT / "demo" / "sap_bods" / "validation" / "JOB_SALES_DAILY"
 TODAY = dt.date(2026, 11, 9)
 
 
 @lru_cache(maxsize=1)
 def estate():
-    return bods.parse_files(sorted((ROOT / "samples" / "bods").glob("*.xml")))
+    return bods.parse_files(sorted((ROOT / "demo" / "sap_bods" / "exports").glob("*.xml")))
 
 
 @lru_cache(maxsize=None)
@@ -263,7 +263,7 @@ def test_cli_run_passes_on_clean_steps(tmp_path):
 
 def test_cli_scaffold(tmp_path, capsys):
     out = tmp_path / "v.toml"
-    cli.main(["validate", "scaffold", str(ROOT / "samples" / "bods"), "--job", "JOB_SALES_DAILY", "--out", str(out),
+    cli.main(["validate", "scaffold", str(ROOT / "demo" / "sap_bods" / "exports"), "--job", "JOB_SALES_DAILY", "--out", str(out),
               "--business-date", "2026-10-31"])
     assert tomllib.loads(out.read_text())["business_date"] == "2026-10-31"
     assert "15 steps" in capsys.readouterr().out

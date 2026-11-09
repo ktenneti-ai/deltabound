@@ -1,4 +1,4 @@
-"""Tests on the multi-file synthetic Fernhill Retail estate in samples/bods/."""
+"""Tests on the multi-file synthetic Fernhill Retail estate in demo/sap_bods/exports/."""
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -9,7 +9,7 @@ from deltabound import graph
 from deltabound.ir import Estate, ObjectKind
 from deltabound.parsers import bods
 
-ESTATE_DIR = Path(__file__).parent.parent / "samples" / "bods"
+ESTATE_DIR = Path(__file__).parent.parent / "demo" / "sap_bods" / "exports"
 
 
 @lru_cache(maxsize=1)

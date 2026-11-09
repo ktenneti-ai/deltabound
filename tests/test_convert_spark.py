@@ -69,7 +69,7 @@ def spark(tmp_path_factory):
 
 @lru_cache(maxsize=1)
 def estate():
-    return bods.parse_files(sorted((ROOT / "samples" / "bods").glob("*.xml")))
+    return bods.parse_files(sorted((ROOT / "demo" / "sap_bods" / "exports").glob("*.xml")))
 
 
 class Widgets:

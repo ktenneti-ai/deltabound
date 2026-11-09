@@ -15,7 +15,7 @@ from deltabound.ir import Estate, ObjectKind
 from deltabound.parsers import bods
 
 ROOT = Path(__file__).parent.parent
-ESTATE_DIR = ROOT / "samples" / "bods"
+ESTATE_DIR = ROOT / "demo" / "sap_bods" / "exports"
 GOLDEN = Path(__file__).parent / "golden" / "convert"
 
 

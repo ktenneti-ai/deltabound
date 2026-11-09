@@ -92,7 +92,7 @@ report" panel. A bad file never stops the others from loading.
 rather than XML. Supporting ATL would be a new parser, and it is worth checking
 which format your design partners can provide.
 
-**Demo.** `npm run demo:data` copies `samples/bods/*.xml` into
+**Demo.** `npm run demo:data` copies `demo/sap_bods/exports/*.xml` into
 `viewer/public/demo/`, and a "Load demo" button opens them. The demo goes
 through the XML path, so it also exercises the parser.
 

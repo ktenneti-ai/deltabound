@@ -180,7 +180,7 @@ only.
 ## 8. CLI
 
 ```
-deltabound validate scaffold samples/bods --job JOB_SALES_DAILY --out validation.yml
+deltabound validate scaffold demo/sap_bods/exports --job JOB_SALES_DAILY --out validation.yml
 deltabound validate run validation.yml --engine duckdb --out validation_out/
 deltabound validate report validation_out/result.json --format md,html
 ```
@@ -204,7 +204,7 @@ same manifest.
 
 ## 10. Testing
 
-- **Fixtures.** `samples/validate/` holds synthetic legacy and new CSV/Parquet
+- **Fixtures.** `demo/sap_bods/validation/` holds synthetic legacy and new CSV/Parquet
   pairs with seeded differences:
   - an identical step
   - a rounding difference within tolerance

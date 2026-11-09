@@ -49,7 +49,9 @@ Python package and CLI name: `deltabound`.
 ## Rules
 - Unknown or unsupported elements become `opaque` transforms and are listed in
   `Estate.unparsed`. Never silently drop anything; coverage must stay measurable.
-- Every feature gets pytest tests using files in `samples/`. Run `pytest -q` before
+- Demo sources live in `demo/<source>/` (deltabound.toml with all settings, README.md, exports/,
+  validation/); `samples/` holds test-only fixtures (bods_mini, old IR files). Every feature gets
+  pytest tests using files in `demo/` or `samples/`. Run `pytest -q` before
   declaring a task done; for viewer changes also `cd viewer && npm test && npm run build`,
   and check the change in a real browser.
 - Samples are SYNTHETIC only (fictional companies). Never add real client or employer
@@ -65,7 +67,7 @@ Python package and CLI name: `deltabound`.
   when bumping the IR again, add an export from the previous version there.
 - Transform names are unique within a dataflow (the parser renames a clashing target to
   `<TABLE>_TARGET`); code may rely on that.
-- `samples/bods/` is the multi-file Fernhill Retail estate (15 jobs, 30 workflows, 60
+- `demo/sap_bods/exports/` is the multi-file Fernhill Retail estate (15 jobs, 30 workflows, 60
   dataflows). `tests/test_bods_estate.py` asserts its exact counts, dead code and unparsed
   items, so update tests when changing the sample. `samples/bods_mini/` is the original
   small sample.

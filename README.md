@@ -16,6 +16,14 @@ questions a migration team asks first:
 Code conversion is out of scope for now. The IR is designed to feed a converter
 (Lakebridge, an LLM or a person) and, later, a step-level data validator.
 
+## Demo sources
+
+Each legacy source has its own folder under `demo/`. One `deltabound.toml` in the folder
+holds all settings for that source: the source type and export location, the datastore to
+Unity Catalog mapping, conversion, AI explanation limits and validation manifests. Every
+command accepts the folder, for example `deltabound summary demo/sap_bods`. See
+[demo/README.md](demo/README.md).
+
 ## Quick start
 
 Requires Python 3.10+ (macOS: `brew install python@3.12`).
@@ -25,13 +33,13 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
 
-deltabound summary  samples/bods
-deltabound tree     samples/bods --job JOB_SALES_DAILY
-deltabound deadcode samples/bods
-deltabound lineage  samples/bods --dataflow DF_FACT_POS_SALES --column DS_DWH.MART.FACT_POS_SALES.AMOUNT
-deltabound waves    samples/bods
-deltabound report   samples/bods --out estate_report.md
-deltabound export   samples/bods --out estate.json
+deltabound summary  demo/sap_bods
+deltabound tree     demo/sap_bods --job JOB_SALES_DAILY
+deltabound deadcode demo/sap_bods
+deltabound lineage  demo/sap_bods --dataflow DF_FACT_POS_SALES --column DS_DWH.MART.FACT_POS_SALES.AMOUNT
+deltabound waves    demo/sap_bods
+deltabound report   demo/sap_bods --out estate_report.md
+deltabound export   demo/sap_bods --out estate.json
 ```
 
 Example output of `tree` (conditions come from if/else, while loops and catch blocks):
@@ -106,8 +114,8 @@ npm test           # Vitest; Python-side tests run with pytest
 - a conversion report
 
 ```bash
-deltabound convert samples/bods --job JOB_SALES_DAILY --out build/JOB_SALES_DAILY
-deltabound convert samples/bods --all --out build/        # one bundle per job
+deltabound convert demo/sap_bods --job JOB_SALES_DAILY --out build/JOB_SALES_DAILY
+deltabound convert demo/sap_bods --all --out build/        # one bundle per job
 cd build/JOB_SALES_DAILY && databricks bundle deploy      # after reviewing conversion_report.md
 ```
 
@@ -158,9 +166,9 @@ report.
 
 ```bash
 pip install -e ".[validate]"                               # DuckDB for local runs
-deltabound validate scaffold samples/bods --job JOB_SALES_DAILY --out validation.toml
-deltabound validate run samples/validate/JOB_SALES_DAILY/validation.toml \
-    --waivers samples/validate/JOB_SALES_DAILY/waivers.toml --out validation_out
+deltabound validate scaffold demo/sap_bods --job JOB_SALES_DAILY --out validation.toml
+deltabound validate run demo/sap_bods/validation/JOB_SALES_DAILY/validation.toml \
+    --waivers demo/sap_bods/validation/JOB_SALES_DAILY/waivers.toml --out validation_out
 # -> validation_out/report.html, report.md, result.json; exit code 1 when a step fails
 ```
 
@@ -199,10 +207,10 @@ leaves out are added back and marked `[from IR]`.
 ```bash
 pip install -e ".[explain]"
 export ANTHROPIC_API_KEY=...            # or: ant auth login
-deltabound explain samples/bods --job JOB_SALES_DAILY
-deltabound explain samples/bods --all --bundle explanations.json   # one file for the viewer
-deltabound explain samples/bods --job JOB_SALES_DAILY --dry-run    # write prompts only, send nothing
-DELTABOUND_LLM_PROVIDER=fake deltabound explain samples/bods --job JOB_SALES_DAILY   # offline demo
+deltabound explain demo/sap_bods --job JOB_SALES_DAILY
+deltabound explain demo/sap_bods --all --bundle explanations.json   # one file for the viewer
+deltabound explain demo/sap_bods --job JOB_SALES_DAILY --dry-run    # write prompts only, send nothing
+DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DAILY   # offline demo
 ```
 
 - **How it runs:** each dataflow is summarised once, then the job summary is
@@ -254,10 +262,11 @@ deltabound/
   validate/         # step-level legacy vs Databricks comparison + sign-off report
 viewer/             # static web viewer: Vite + React + React Flow + Pyodide
   cli.py            # command line
-samples/bods/       # SYNTHETIC estate, fictional Fernhill Retail: 15 jobs, 30 workflows, 60 dataflows
+demo/               # one folder per legacy source, each with a deltabound.toml (see demo/README.md)
+  sap_bods/         # SYNTHETIC Fernhill Retail: exports/ (15 jobs, 30 workflows, 60 dataflows), validation/
+  sql_server/       # planned: SQL Server Agent jobs + T-SQL
 samples/bods_mini/  # SYNTHETIC small estate used by the original tests
 samples/ir/         # IR files from older versions (compatibility tests)
-samples/validate/   # SYNTHETIC legacy/Databricks outputs and a validation manifest
 tests/
 ```
 

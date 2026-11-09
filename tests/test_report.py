@@ -7,7 +7,7 @@ from deltabound import cli, graph, report
 from deltabound.ir import ObjectKind
 from deltabound.parsers import bods
 
-ESTATE_DIR = Path(__file__).parent.parent / "samples" / "bods"
+ESTATE_DIR = Path(__file__).parent.parent / "demo" / "sap_bods" / "exports"
 
 
 @lru_cache(maxsize=1)
@@ -87,7 +87,7 @@ def test_cli_writes_report(tmp_path):
 
 def test_report_on_mini_sample(tmp_path):
     out = tmp_path / "mini.md"
-    cli.main(["report", str(ESTATE_DIR.parent / "bods_mini"), "--out", str(out), "--top", "5"])
+    cli.main(["report", str(Path(__file__).parent.parent / "samples" / "bods_mini"), "--out", str(out), "--top", "5"])
     text = out.read_text()
     assert "## Most complex jobs (top 2)" in text
     assert "| WF_OLD_RETURNS_2019 | workflow |" in text
