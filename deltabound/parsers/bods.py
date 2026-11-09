@@ -341,7 +341,8 @@ def _parse_lookup_calls(expr: str, column: str, estate: Estate, where: str) -> l
             if ref.table is None and problem is None:
                 problem = f"table '{table_text}' cannot be resolved statically"
         if problem:
-            estate.unparsed.append(f"{where}: {function} call not fully parsed ({problem}): {raw[:80]}")
+            shown = raw if len(raw) <= 80 else raw[:77] + "..."
+            estate.unparsed.append(f"{where}: {function} call not fully parsed ({problem}): {shown}")
         refs.append(ref)
     return refs
 

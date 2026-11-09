@@ -5,7 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import graph
+from . import graph, report
 from .ir import ObjectKind
 from .parsers import bods
 
@@ -63,6 +63,12 @@ def cmd_export(a) -> None:
     print(f"Wrote {a.out}")
 
 
+def cmd_report(a) -> None:
+    e = _load(a.paths)
+    Path(a.out).write_text(report.render_markdown(e, top=a.top, wave_size=a.wave_size))
+    print(f"Wrote {a.out}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="deltabound", description="Understand legacy ETL estates.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -81,6 +87,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--column", required=True, help="e.g. DS_DWH.STG.STG_ORDERS.NET_AMOUNT")
     add("waves", cmd_waves, "migration waves, easiest first").add_argument("--size", type=int, default=10)
     add("export", cmd_export, "write the IR as JSON").add_argument("--out", default="estate.json")
+    s = add("report", cmd_report, "write a markdown estate report")
+    s.add_argument("--out", default="estate_report.md")
+    s.add_argument("--top", type=int, default=5, help="number of most complex jobs to list")
+    s.add_argument("--wave-size", type=int, default=10)
 
     a = p.parse_args(argv)
     a.fn(a)
