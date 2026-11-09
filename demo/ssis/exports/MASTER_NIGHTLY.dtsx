@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!-- SYNTHETIC SSIS package for development only. Halden Outfitters is a fictional company. -->
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="MASTER_NIGHTLY" DTS:ExecutableType="Microsoft.Package" DTS:CreationName="Microsoft.Package">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[DWH]" DTS:ObjectName="DWH" DTS:CreationName="OLEDB">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=sql-dwh01;Initial Catalog=HaldenDWH;Provider=SQLNCLI11.1;User ID=etl_user;Password=Example-Not-A-Real-Secret1;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables>
+    <DTS:Variable DTS:Namespace="User" DTS:ObjectName="RunId">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Log Start" DTS:ObjectName="SQL Log Start" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="INSERT INTO ctl.RunLog (Package, StartedAt) VALUES ('MASTER_NIGHTLY', GETDATE())" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SEQ Load" DTS:ObjectName="SEQ Load" DTS:ExecutableType="STOCK:SEQUENCE">
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package\SEQ Load\EPT Sales" DTS:ObjectName="EPT Sales" DTS:ExecutableType="Microsoft.ExecutePackageTask">
+          <DTS:ObjectData>
+            <ExecutePackageTask>
+              <PackageName>PKG_SALES.dtsx</PackageName>
+            </ExecutePackageTask>
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\SEQ Load\EPT Finance" DTS:ObjectName="EPT Finance" DTS:ExecutableType="Microsoft.ExecutePackageTask">
+          <DTS:ObjectData>
+            <ExecutePackageTask>
+              <PackageName>PKG_FINANCE.dtsx</PackageName>
+            </ExecutePackageTask>
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Log End" DTS:ObjectName="SQL Log End" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="UPDATE ctl.RunLog SET EndedAt = GETDATE() WHERE Package = 'MASTER_NIGHTLY'" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\MAIL Failure" DTS:ObjectName="MAIL Failure" DTS:ExecutableType="Microsoft.SendMailTask" />
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:From="Package\SQL Log Start" DTS:To="Package\SEQ Load" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\SEQ Load" DTS:To="Package\SQL Log End" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\SEQ Load" DTS:To="Package\MAIL Failure" DTS:Value="1" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+  </DTS:PrecedenceConstraints>
+  <DTS:EventHandlers>
+    <DTS:EventHandler DTS:EventName="OnError" DTS:refId="Package.EventHandlers[OnError]">
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package.EventHandlers[OnError]\SQL Log Error" DTS:ObjectName="SQL Log Error" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="UPDATE ctl.RunLog SET Failed = 1 WHERE Package = 'MASTER_NIGHTLY'" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+    </DTS:EventHandler>
+  </DTS:EventHandlers>
+</DTS:Executable>

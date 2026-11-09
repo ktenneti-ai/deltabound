@@ -1,0 +1,401 @@
+<?xml version="1.0"?>
+<!-- SYNTHETIC SSIS package for development only. Halden Outfitters is a fictional company. -->
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="PKG_SALES" DTS:ExecutableType="Microsoft.Package" DTS:CreationName="Microsoft.Package">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ERP]" DTS:ObjectName="ERP" DTS:CreationName="OLEDB">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=sql-erp01;Initial Catalog=HaldenERP;Provider=SQLNCLI11.1;Integrated Security=SSPI;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[DWH]" DTS:ObjectName="DWH" DTS:CreationName="OLEDB">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=sql-dwh01;Initial Catalog=HaldenDWH;Provider=SQLNCLI11.1;Integrated Security=SSPI;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[POS_FILE]" DTS:ObjectName="POS_FILE" DTS:CreationName="FLATFILE">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="\\fileshare\pos\inbound\current.csv" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables>
+    <DTS:Variable DTS:Namespace="User" DTS:ObjectName="LoadDate" DTS:EvaluateAsExpression="True" DTS:Expression="DATEADD(&quot;day&quot;, -1, GETDATE())">
+      <DTS:VariableValue DTS:DataType="7">2026-10-31</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:Namespace="User" DTS:ObjectName="FullLoad">
+      <DTS:VariableValue DTS:DataType="11">False</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Truncate Staging" DTS:ObjectName="SQL Truncate Staging" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="TRUNCATE TABLE stg.SalesLines" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Sales Lines" DTS:ObjectName="DFT Sales Lines" DTS:ExecutableType="Microsoft.Pipeline">
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Sales Lines\OLE_SRC Order Lines" name="OLE_SRC Order Lines" componentClassID="Microsoft.OLEDBSource">
+              <properties>
+                <property name="AccessMode">2</property>
+                <property name="SqlCommand">SELECT OrderID, LineNo, OrderDate, CustomerID, Qty, UnitPrice, Channel FROM sales.OrderLines WHERE ModifiedDate &gt;= ?</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[ERP]" />
+              </connections>
+              <inputs />
+              <outputs>
+                <output refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[OrderID]" name="OrderID" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[OrderID]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[LineNo]" name="LineNo" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[LineNo]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[OrderDate]" name="OrderDate" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[OrderDate]" dataType="dbDate" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[CustomerID]" name="CustomerID" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[CustomerID]" dataType="wstr" length="10" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[Qty]" name="Qty" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[Qty]" dataType="numeric" precision="13" scale="3" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[UnitPrice]" name="UnitPrice" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[UnitPrice]" dataType="numeric" precision="15" scale="2" />
+                    <outputColumn refId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[Channel]" name="Channel" lineageId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output].Columns[Channel]" dataType="wstr" length="10" />
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\DER Amounts" name="DER Amounts" componentClassID="Microsoft.DerivedColumn">
+              <inputs>
+                <input refId="Package\DFT Sales Lines\DER Amounts.Inputs[Derived Column Input]" name="Derived Column Input" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output]" name="Derived Column Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output].Columns[LineAmount]" name="LineAmount" lineageId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output].Columns[LineAmount]" dataType="numeric" precision="15" scale="2">
+                      <properties>
+                        <property name="FriendlyExpression">[Qty] * [UnitPrice]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output].Columns[LoadDate]" name="LoadDate" lineageId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output].Columns[LoadDate]" dataType="dbDate">
+                      <properties>
+                        <property name="FriendlyExpression">(DT_DBDATE)@[User::LoadDate]</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+                <output refId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Error Output]" name="Derived Column Error Output" isErrorOut="true">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\LKP Customer" name="LKP Customer" componentClassID="Microsoft.Lookup">
+              <properties>
+                <property name="NoMatchBehavior">1</property>
+                <property name="SqlCommand">SELECT CustomerKey, CustomerID FROM dim.Customer</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Sales Lines\LKP Customer.Inputs[Lookup Input]" name="Lookup Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Sales Lines\LKP Customer.Inputs[Lookup Input].Columns[CustomerID]" cachedName="CustomerID">
+                      <properties>
+                        <property name="JoinToReferenceColumn">CustomerID</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup Match Output]" name="Lookup Match Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup Match Output].Columns[CustomerKey]" name="CustomerKey" lineageId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup Match Output].Columns[CustomerKey]" dataType="i4">
+                      <properties>
+                        <property name="CopyFromReferenceColumn">CustomerKey</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+                <output refId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup No Match Output]" name="Lookup No Match Output">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\CSPL Channel" name="CSPL Channel" componentClassID="Microsoft.ConditionalSplit">
+              <inputs>
+                <input refId="Package\DFT Sales Lines\CSPL Channel.Inputs[Conditional Split Input]" name="Conditional Split Input" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Lines\CSPL Channel.Outputs[Store]" name="Store">
+                  <properties>
+                    <property name="FriendlyExpression">[Channel] == "STORE"</property>
+                  </properties>
+                  <outputColumns />
+                </output>
+                <output refId="Package\DFT Sales Lines\CSPL Channel.Outputs[Web]" name="Web">
+                  <properties>
+                    <property name="FriendlyExpression">[Channel] == "WEB"</property>
+                  </properties>
+                  <outputColumns />
+                </output>
+                <output refId="Package\DFT Sales Lines\CSPL Channel.Outputs[Other]" name="Other" isDefaultOut="true">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\DER Web Fee" name="DER Web Fee" componentClassID="Microsoft.DerivedColumn">
+              <inputs>
+                <input refId="Package\DFT Sales Lines\DER Web Fee.Inputs[Derived Column Input]" name="Derived Column Input" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Lines\DER Web Fee.Outputs[Derived Column Output]" name="Derived Column Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Lines\DER Web Fee.Outputs[Derived Column Output].Columns[LineAmount]" name="LineAmount" lineageId="Package\DFT Sales Lines\DER Web Fee.Outputs[Derived Column Output].Columns[LineAmount]" dataType="numeric" precision="15" scale="2">
+                      <properties>
+                        <property name="FriendlyExpression">[LineAmount] * 1.02</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\UALL Channels" name="UALL Channels" componentClassID="Microsoft.UnionAll">
+              <inputs>
+                <input refId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 1]" name="Union All Input 1" />
+                <input refId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 2]" name="Union All Input 2" />
+                <input refId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 3]" name="Union All Input 3" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1]" name="Union All Output 1">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[OrderID]" name="OrderID" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[OrderID]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LineNo]" name="LineNo" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LineNo]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[OrderDate]" name="OrderDate" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[OrderDate]" dataType="dbDate" />
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[CustomerKey]" name="CustomerKey" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[CustomerKey]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LineAmount]" name="LineAmount" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LineAmount]" dataType="numeric" />
+                    <outputColumn refId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LoadDate]" name="LoadDate" lineageId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1].Columns[LoadDate]" dataType="dbDate" />
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Lines\OLE_DST Sales Lines" name="OLE_DST Sales Lines" componentClassID="Microsoft.OLEDBDestination">
+              <properties>
+                <property name="AccessMode">3</property>
+                <property name="OpenRowset">[stg].[SalesLines]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Sales Lines\OLE_DST Sales Lines.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" />
+              </inputs>
+              <outputs />
+            </component>
+            <component refId="Package\DFT Sales Lines\OLE_DST Unknown Customers" name="OLE_DST Unknown Customers" componentClassID="Microsoft.OLEDBDestination">
+              <properties>
+                <property name="AccessMode">3</property>
+                <property name="OpenRowset">[stg].[SalesLinesUnknownCustomer]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Sales Lines\OLE_DST Unknown Customers.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" />
+              </inputs>
+              <outputs />
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Sales Lines.Paths[OLE_SRC Order Lines.OLE DB Source Output]" startId="Package\DFT Sales Lines\OLE_SRC Order Lines.Outputs[OLE DB Source Output]" endId="Package\DFT Sales Lines\DER Amounts.Inputs[Derived Column Input]" />
+            <path refId="Package\DFT Sales Lines.Paths[DER Amounts.Derived Column Output]" startId="Package\DFT Sales Lines\DER Amounts.Outputs[Derived Column Output]" endId="Package\DFT Sales Lines\LKP Customer.Inputs[Lookup Input]" />
+            <path refId="Package\DFT Sales Lines.Paths[LKP Customer.Lookup Match Output]" startId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup Match Output]" endId="Package\DFT Sales Lines\CSPL Channel.Inputs[Conditional Split Input]" />
+            <path refId="Package\DFT Sales Lines.Paths[LKP Customer.Lookup No Match Output]" startId="Package\DFT Sales Lines\LKP Customer.Outputs[Lookup No Match Output]" endId="Package\DFT Sales Lines\OLE_DST Unknown Customers.Inputs[OLE DB Destination Input]" />
+            <path refId="Package\DFT Sales Lines.Paths[CSPL Channel.Store]" startId="Package\DFT Sales Lines\CSPL Channel.Outputs[Store]" endId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 1]" />
+            <path refId="Package\DFT Sales Lines.Paths[CSPL Channel.Web]" startId="Package\DFT Sales Lines\CSPL Channel.Outputs[Web]" endId="Package\DFT Sales Lines\DER Web Fee.Inputs[Derived Column Input]" />
+            <path refId="Package\DFT Sales Lines.Paths[DER Web Fee.Derived Column Output]" startId="Package\DFT Sales Lines\DER Web Fee.Outputs[Derived Column Output]" endId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 2]" />
+            <path refId="Package\DFT Sales Lines.Paths[CSPL Channel.Other]" startId="Package\DFT Sales Lines\CSPL Channel.Outputs[Other]" endId="Package\DFT Sales Lines\UALL Channels.Inputs[Union All Input 3]" />
+            <path refId="Package\DFT Sales Lines.Paths[UALL Channels.Union All Output 1]" startId="Package\DFT Sales Lines\UALL Channels.Outputs[Union All Output 1]" endId="Package\DFT Sales Lines\OLE_DST Sales Lines.Inputs[OLE DB Destination Input]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\FEL POS Files" DTS:ObjectName="FEL POS Files" DTS:ExecutableType="STOCK:FOREACHLOOP">
+      <DTS:ForEachEnumerator DTS:ObjectName="Foreach File Enumerator" DTS:CreationName="Microsoft.ForEachFileEnumerator">
+        <DTS:ObjectData>
+          <ForEachFileEnumeratorProperties>
+            <FEFEProperty Folder="\\fileshare\pos\inbound" />
+            <FEFEProperty FileSpec="*.csv" />
+          </ForEachFileEnumeratorProperties>
+        </DTS:ObjectData>
+      </DTS:ForEachEnumerator>
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package\FEL POS Files\DFT Load POS File" DTS:ObjectName="DFT Load POS File" DTS:ExecutableType="Microsoft.Pipeline">
+          <DTS:ObjectData>
+            <pipeline version="1">
+              <components>
+                <component refId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File" name="FF_SRC POS File" componentClassID="Microsoft.FlatFileSource">
+                  <connections>
+                    <connection name="Connection" connectionManagerID="Package.ConnectionManagers[POS_FILE]" />
+                  </connections>
+                  <inputs />
+                  <outputs>
+                    <output refId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output]" name="Flat File Source Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[StoreCode]" name="StoreCode" lineageId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[StoreCode]" dataType="str" length="4" />
+                        <outputColumn refId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[Sku]" name="Sku" lineageId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[Sku]" dataType="str" length="18" />
+                        <outputColumn refId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[Qty]" name="Qty" lineageId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[Qty]" dataType="str" length="12" />
+                      </outputColumns>
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\FEL POS Files\DFT Load POS File\DCNV Types" name="DCNV Types" componentClassID="Microsoft.DataConvert">
+                  <inputs>
+                    <input refId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Inputs[Data Conversion Input]" name="Data Conversion Input" />
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Outputs[Data Conversion Output]" name="Data Conversion Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Outputs[Data Conversion Output].Columns[QtyNumeric]" name="QtyNumeric" lineageId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Outputs[Data Conversion Output].Columns[QtyNumeric]" dataType="numeric" precision="13" scale="3">
+                          <properties>
+                            <property name="SourceInputColumnLineageID">#{Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output].Columns[Qty]}</property>
+                          </properties>
+                        </outputColumn>
+                      </outputColumns>
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\FEL POS Files\DFT Load POS File\OLE_DST POS Lines" name="OLE_DST POS Lines" componentClassID="Microsoft.OLEDBDestination">
+                  <properties>
+                    <property name="AccessMode">3</property>
+                    <property name="OpenRowset">[stg].[PosLines]</property>
+                  </properties>
+                  <connections>
+                    <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\FEL POS Files\DFT Load POS File\OLE_DST POS Lines.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" />
+                  </inputs>
+                  <outputs />
+                </component>
+              </components>
+              <paths>
+                <path refId="Package\FEL POS Files\DFT Load POS File.Paths[FF_SRC POS File.Flat File Source Output]" startId="Package\FEL POS Files\DFT Load POS File\FF_SRC POS File.Outputs[Flat File Source Output]" endId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Inputs[Data Conversion Input]" />
+                <path refId="Package\FEL POS Files\DFT Load POS File.Paths[DCNV Types.Data Conversion Output]" startId="Package\FEL POS Files\DFT Load POS File\DCNV Types.Outputs[Data Conversion Output]" endId="Package\FEL POS Files\DFT Load POS File\OLE_DST POS Lines.Inputs[OLE DB Destination Input]" />
+              </paths>
+            </pipeline>
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Sales Summary" DTS:ObjectName="DFT Sales Summary" DTS:ExecutableType="Microsoft.Pipeline">
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Sales Summary\OLE_SRC Staged Lines" name="OLE_SRC Staged Lines" componentClassID="Microsoft.OLEDBSource">
+              <properties>
+                <property name="AccessMode">0</property>
+                <property name="OpenRowset">[stg].[SalesLines]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs />
+              <outputs>
+                <output refId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[OrderDate]" name="OrderDate" lineageId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[OrderDate]" dataType="dbDate" />
+                    <outputColumn refId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[CustomerKey]" name="CustomerKey" lineageId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[CustomerKey]" dataType="i4" />
+                    <outputColumn refId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[LineAmount]" name="LineAmount" lineageId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output].Columns[LineAmount]" dataType="numeric" precision="15" scale="2" />
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Summary\SRT Customer Date" name="SRT Customer Date" componentClassID="Microsoft.Sort">
+              <properties>
+                <property name="EliminateDuplicates">false</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Sales Summary\SRT Customer Date.Inputs[Sort Input]" name="Sort Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Sales Summary\SRT Customer Date.Inputs[Sort Input].Columns[CustomerKey]" cachedName="CustomerKey">
+                      <properties>
+                        <property name="NewSortKeyPosition">1</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Sales Summary\SRT Customer Date.Inputs[Sort Input].Columns[OrderDate]" cachedName="OrderDate">
+                      <properties>
+                        <property name="NewSortKeyPosition">-2</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Summary\SRT Customer Date.Outputs[Sort Output]" name="Sort Output">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Summary\AGG Daily" name="AGG Daily" componentClassID="Microsoft.Aggregate">
+              <inputs>
+                <input refId="Package\DFT Sales Summary\AGG Daily.Inputs[Aggregate Input 1]" name="Aggregate Input 1" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1]" name="Aggregate Output 1">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[OrderDate]" name="OrderDate" lineageId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[OrderDate]" dataType="dbDate">
+                      <properties>
+                        <property name="AggregationType">0</property>
+                        <property name="SourceColumn">OrderDate</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[CustomerKey]" name="CustomerKey" lineageId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[CustomerKey]" dataType="i4">
+                      <properties>
+                        <property name="AggregationType">0</property>
+                        <property name="SourceColumn">CustomerKey</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[TotalAmount]" name="TotalAmount" lineageId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[TotalAmount]" dataType="numeric" precision="17" scale="2">
+                      <properties>
+                        <property name="AggregationType">4</property>
+                        <property name="SourceColumn">LineAmount</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[Lines]" name="Lines" lineageId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1].Columns[Lines]" dataType="i8">
+                      <properties>
+                        <property name="AggregationType">2</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Sales Summary\OLE_DST Daily Sales" name="OLE_DST Daily Sales" componentClassID="Microsoft.OLEDBDestination">
+              <properties>
+                <property name="AccessMode">3</property>
+                <property name="OpenRowset">[mart].[DailySales]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Sales Summary\OLE_DST Daily Sales.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" />
+              </inputs>
+              <outputs />
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Sales Summary.Paths[OLE_SRC Staged Lines.OLE DB Source Output]" startId="Package\DFT Sales Summary\OLE_SRC Staged Lines.Outputs[OLE DB Source Output]" endId="Package\DFT Sales Summary\SRT Customer Date.Inputs[Sort Input]" />
+            <path refId="Package\DFT Sales Summary.Paths[SRT Customer Date.Sort Output]" startId="Package\DFT Sales Summary\SRT Customer Date.Outputs[Sort Output]" endId="Package\DFT Sales Summary\AGG Daily.Inputs[Aggregate Input 1]" />
+            <path refId="Package\DFT Sales Summary.Paths[AGG Daily.Aggregate Output 1]" startId="Package\DFT Sales Summary\AGG Daily.Outputs[Aggregate Output 1]" endId="Package\DFT Sales Summary\OLE_DST Daily Sales.Inputs[OLE DB Destination Input]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SCR Notify Planners" DTS:ObjectName="SCR Notify Planners" DTS:ExecutableType="Microsoft.ScriptTask" />
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:From="Package\SQL Truncate Staging" DTS:To="Package\DFT Sales Lines" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\SQL Truncate Staging" DTS:To="Package\FEL POS Files" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\DFT Sales Lines" DTS:To="Package\DFT Sales Summary" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\FEL POS Files" DTS:To="Package\DFT Sales Summary" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+    <DTS:PrecedenceConstraint DTS:From="Package\DFT Sales Summary" DTS:To="Package\SCR Notify Planners" DTS:Value="2" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>

@@ -1,7 +1,9 @@
 # Design: SSIS parser (`deltabound/parsers/ssis.py`)
 
-Status: DEFERRED for future work (decided 2026-11-09). The IR changes below are
-not approved and IR stays at 0.2.0 until this work resumes. Author: Claude for Kishore Tenneti, 2026-11-09.
+Status: IMPLEMENTED 2026-11-09 as IR 0.3.0 (all eight changes, additive). Departures: named
+outputs are modelled as Branch names "Component.Output" (unique, so inputs reference them
+directly; no dotted-input parsing needed); `convert` refuses SSIS for now (its expression
+translator is BODS-specific). Unverified against real packages; constants in parsers/ssis.py. Author: Claude for Kishore Tenneti, 2026-11-09.
 
 ## Goal
 

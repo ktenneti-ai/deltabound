@@ -1,0 +1,190 @@
+<?xml version="1.0"?>
+<!-- SYNTHETIC SSIS package for development only. Halden Outfitters is a fictional company. -->
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="PKG_FINANCE" DTS:ExecutableType="Microsoft.Package" DTS:CreationName="Microsoft.Package">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ERP]" DTS:ObjectName="ERP" DTS:CreationName="OLEDB">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=sql-erp01;Initial Catalog=HaldenERP;Provider=SQLNCLI11.1;Integrated Security=SSPI;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[DWH]" DTS:ObjectName="DWH" DTS:CreationName="OLEDB">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=sql-dwh01;Initial Catalog=HaldenDWH;Provider=SQLNCLI11.1;Integrated Security=SSPI;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables>
+    <DTS:Variable DTS:Namespace="User" DTS:ObjectName="PeriodClose">
+      <DTS:VariableValue DTS:DataType="11">False</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\DFT GL Join" DTS:ObjectName="DFT GL Join" DTS:ExecutableType="Microsoft.Pipeline">
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT GL Join\OLE_SRC GL Header" name="OLE_SRC GL Header" componentClassID="Microsoft.OLEDBSource">
+              <properties>
+                <property name="AccessMode">0</property>
+                <property name="OpenRowset">[fin].[GLHeader]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[ERP]" />
+              </connections>
+              <inputs />
+              <outputs>
+                <output refId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output].Columns[DocNo]" name="DocNo" lineageId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output].Columns[DocNo]" dataType="wstr" length="10" />
+                    <outputColumn refId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output].Columns[PostingDate]" name="PostingDate" lineageId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output].Columns[PostingDate]" dataType="dbDate" />
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\OLE_SRC GL Line" name="OLE_SRC GL Line" componentClassID="Microsoft.OLEDBSource">
+              <properties>
+                <property name="AccessMode">0</property>
+                <property name="OpenRowset">[fin].[GLLine]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[ERP]" />
+              </connections>
+              <inputs />
+              <outputs>
+                <output refId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[DocNo]" name="DocNo" lineageId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[DocNo]" dataType="wstr" length="10" />
+                    <outputColumn refId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[Account]" name="Account" lineageId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[Account]" dataType="wstr" length="10" />
+                    <outputColumn refId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[Amount]" name="Amount" lineageId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output].Columns[Amount]" dataType="numeric" precision="15" scale="2" />
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\SRT Header" name="SRT Header" componentClassID="Microsoft.Sort">
+              <inputs>
+                <input refId="Package\DFT GL Join\SRT Header.Inputs[Sort Input]" name="Sort Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT GL Join\SRT Header.Inputs[Sort Input].Columns[DocNo]" cachedName="DocNo">
+                      <properties>
+                        <property name="NewSortKeyPosition">1</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT GL Join\SRT Header.Outputs[Sort Output]" name="Sort Output">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\SRT Line" name="SRT Line" componentClassID="Microsoft.Sort">
+              <inputs>
+                <input refId="Package\DFT GL Join\SRT Line.Inputs[Sort Input]" name="Sort Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT GL Join\SRT Line.Inputs[Sort Input].Columns[DocNo]" cachedName="DocNo">
+                      <properties>
+                        <property name="NewSortKeyPosition">1</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT GL Join\SRT Line.Outputs[Sort Output]" name="Sort Output">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\MJN GL" name="MJN GL" componentClassID="Microsoft.MergeJoin">
+              <properties>
+                <property name="JoinType">2</property>
+                <property name="NumKeyColumns">1</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input]" name="Merge Join Left Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input].Columns[DocNo]" cachedName="DocNo" />
+                    <inputColumn refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input].Columns[PostingDate]" cachedName="PostingDate" />
+                  </inputColumns>
+                </input>
+                <input refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input]" name="Merge Join Right Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input].Columns[Account]" cachedName="Account" />
+                    <inputColumn refId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input].Columns[Amount]" cachedName="Amount" />
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output]" name="Merge Join Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[DocNo]" name="DocNo" lineageId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[DocNo]" dataType="wstr" length="10">
+                      <properties>
+                        <property name="InputColumnID">Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input].Columns[DocNo]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[PostingDate]" name="PostingDate" lineageId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[PostingDate]" dataType="dbDate">
+                      <properties>
+                        <property name="InputColumnID">Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input].Columns[PostingDate]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[Account]" name="Account" lineageId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[Account]" dataType="wstr" length="10">
+                      <properties>
+                        <property name="InputColumnID">Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input].Columns[Account]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[Amount]" name="Amount" lineageId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output].Columns[Amount]" dataType="numeric" precision="15" scale="2">
+                      <properties>
+                        <property name="InputColumnID">Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input].Columns[Amount]</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\SC FX Revalue" name="SC FX Revalue" componentClassID="Microsoft.ScriptComponentHost">
+              <inputs>
+                <input refId="Package\DFT GL Join\SC FX Revalue.Inputs[Input 0]" name="Input 0" />
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT GL Join\SC FX Revalue.Outputs[Output 0]" name="Output 0">
+                  <outputColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT GL Join\OLE_DST GL" name="OLE_DST GL" componentClassID="Microsoft.OLEDBDestination">
+              <properties>
+                <property name="AccessMode">3</property>
+                <property name="OpenRowset">[mart].[GL]</property>
+              </properties>
+              <connections>
+                <connection name="Connection" connectionManagerID="Package.ConnectionManagers[DWH]" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT GL Join\OLE_DST GL.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" />
+              </inputs>
+              <outputs />
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT GL Join.Paths[OLE_SRC GL Header.OLE DB Source Output]" startId="Package\DFT GL Join\OLE_SRC GL Header.Outputs[OLE DB Source Output]" endId="Package\DFT GL Join\SRT Header.Inputs[Sort Input]" />
+            <path refId="Package\DFT GL Join.Paths[OLE_SRC GL Line.OLE DB Source Output]" startId="Package\DFT GL Join\OLE_SRC GL Line.Outputs[OLE DB Source Output]" endId="Package\DFT GL Join\SRT Line.Inputs[Sort Input]" />
+            <path refId="Package\DFT GL Join.Paths[SRT Header.Sort Output]" startId="Package\DFT GL Join\SRT Header.Outputs[Sort Output]" endId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Left Input]" />
+            <path refId="Package\DFT GL Join.Paths[SRT Line.Sort Output]" startId="Package\DFT GL Join\SRT Line.Outputs[Sort Output]" endId="Package\DFT GL Join\MJN GL.Inputs[Merge Join Right Input]" />
+            <path refId="Package\DFT GL Join.Paths[MJN GL.Merge Join Output]" startId="Package\DFT GL Join\MJN GL.Outputs[Merge Join Output]" endId="Package\DFT GL Join\SC FX Revalue.Inputs[Input 0]" />
+            <path refId="Package\DFT GL Join.Paths[SC FX Revalue.Output 0]" startId="Package\DFT GL Join\SC FX Revalue.Outputs[Output 0]" endId="Package\DFT GL Join\OLE_DST GL.Inputs[OLE DB Destination Input]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Close Period" DTS:ObjectName="SQL Close Period" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="EXEC fin.ClosePeriod" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:From="Package\DFT GL Join" DTS:To="Package\SQL Close Period" DTS:Value="0" DTS:EvalOp="3" DTS:Expression="@[User::PeriodClose] == TRUE" DTS:LogicalAnd="True" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>

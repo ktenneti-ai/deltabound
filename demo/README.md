@@ -7,7 +7,7 @@ validation). Every command takes the folder.
 | Folder | Source | Status |
 |---|---|---|
 | [`sap_bods/`](sap_bods/) | SAP Data Services repository exports (XML) | supported, full demo |
-| `ssis/` | SQL Server Integration Services packages (.dtsx) | parser in progress |
+| [`ssis/`](ssis/) | SQL Server Integration Services packages (.dtsx) | supported (analysis, viewer, explain, validate; conversion planned) |
 | [`sql_server/`](sql_server/) | SQL Server Agent jobs + T-SQL | planned |
 
 ```

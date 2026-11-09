@@ -19,11 +19,12 @@ from typing import Any, Optional
 
 from .. import __version__, graph
 from ..ir import IR_VERSION, CallStep, Estate, EtlObject, ObjectKind, ScriptStep
-from .config import ConvertConfig
+from .config import ConvertConfig, ConvertError
 from .dataflow import CELL, HEADER, RUNTIME, convert_dataflow, variable_default, variable_type
 from .expressions import translate
 from .model import ConversionResult, TaskResult
 
+SUPPORTED_TOOLS = ("sap_data_services",)  # expressions.py translates this tool's syntax only
 SIMPLE_CONDITION = re.compile(r"^\$(\w+)\s*(=|<>|!=|<=|>=|<|>)\s*('([^']*)'|-?\d+(?:\.\d+)?)$")
 CONDITION_OPS = {"=": "EQUAL_TO", "<>": "NOT_EQUAL", "!=": "NOT_EQUAL", "<": "LESS_THAN", "<=": "LESS_THAN_OR_EQUAL",
                  ">": "GREATER_THAN", ">=": "GREATER_THAN_OR_EQUAL"}
@@ -323,6 +324,9 @@ def _scalar(v: Any) -> str:
 # ---------- entry point ----------
 
 def convert_job(estate: Estate, job: str, cfg: ConvertConfig) -> ConversionResult:
+    if estate.source_tool not in SUPPORTED_TOOLS:
+        raise ConvertError(f"Conversion rules cover {', '.join(SUPPORTED_TOOLS)} only; {estate.source_tool} conversion "
+                           "is planned. Its expressions use a different syntax, so converting would mistranslate.")
     root = estate.objects.get(job)
     if root is None or root.kind != ObjectKind.JOB:
         raise KeyError(f"No job named {job}")

@@ -37,7 +37,7 @@ def statuses(result: dict) -> dict[str, tuple[str, str]]:
 def test_load_bods_xml():
     r = bridge.load(files(*BODS))
     assert r["ok"] and r["explanations"] is None
-    assert r["analysis"]["counts"] == {"job": 15, "workflow": 30, "dataflow": 60, "transforms": 226, "opaque": 6}
+    assert r["analysis"]["counts"] == {"job": 15, "workflow": 30, "dataflow": 60, "task": 0, "transforms": 226, "opaque": 6}
     assert all(e["status"] == "ok" for e in r["load_report"])
     json.dumps(r)  # JSON-serialisable for the browser
 
@@ -103,13 +103,25 @@ def test_malformed_bods_xml_after_detection():
     assert statuses(r)["half.xml"] == ("bods_xml", "error") and not r["ok"]
 
 
-def test_ssis_and_atl_are_recognised_as_unsupported():
-    dtsx = b'<?xml version="1.0"?><DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" />'
-    r = bridge.load([("PKG_SALES.dtsx", dtsx), ("repo.atl", b"AL_PROJECT ...")])
-    st = statuses(r)
-    assert st["PKG_SALES.dtsx"] == ("ssis", "unsupported")
-    assert st["repo.atl"] == ("atl", "unsupported")
-    assert not r["ok"]
+def test_atl_is_recognised_as_unsupported():
+    r = bridge.load([("repo.atl", b"AL_PROJECT ...")])
+    assert statuses(r)["repo.atl"] == ("atl", "unsupported") and not r["ok"]
+
+
+def test_ssis_packages_load():
+    pkgs = sorted((ROOT / "demo" / "ssis" / "exports").glob("*.dtsx"))
+    r = bridge.load(files(*pkgs))
+    assert r["ok"] and r["estate"]["source_tool"] == "ssis"
+    assert r["analysis"]["counts"] == {"job": 4, "workflow": 3, "dataflow": 4, "task": 8, "transforms": 22, "opaque": 1}
+    assert all(e["status"] == "ok" for e in r["load_report"])
+    lin = bridge.lineage("PKG_SALES\\DFT Sales Lines")
+    assert lin["owner"]["CSPL Channel.Web.LineAmount"] == "transform:CSPL Channel"
+
+
+def test_mixed_tools_keep_one_estate():
+    r = bridge.load(files(BODS[0], ROOT / "demo" / "ssis" / "exports" / "PKG_SALES.dtsx"))
+    assert r["estate"]["source_tool"] == "sap_data_services"
+    assert statuses(r)["PKG_SALES.dtsx"] == ("ssis", "skipped")
 
 
 def test_xml_and_estate_json_together_uses_the_xml():

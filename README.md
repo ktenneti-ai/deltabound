@@ -1,6 +1,7 @@
 # DeltaBound
 
-Understand, plan and validate legacy ETL migrations. SAP Data Services (BODS) first.
+Understand, plan, convert and validate legacy ETL migrations to Databricks. Sources: SAP Data
+Services (BODS) and SQL Server Integration Services (SSIS); SQL Server Agent jobs + T-SQL planned.
 
 Legacy ETL estates are hard to migrate because nobody fully understands them:
 jobs call workflows that call nested workflows and dataflows, with conditions,
@@ -66,7 +67,7 @@ job: JOB_SALES_DAILY
         dataflow: DF_FACT_SALES
         dataflow: DF_FACT_INVOICE
         dataflow: DF_AGG_SALES_DAILY   [if $G_REGION = 'ALL']
-    dataflow: DF_CTL_JOB_ERROR   [if on error (ALL)]
+    dataflow: DF_CTL_JOB_ERROR   [on error (ALL)]
     workflow: WF_JOB_END
       dataflow: DF_CTL_JOB_END
 ```
@@ -248,7 +249,7 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DA
   For client estates, confirm that is allowed first, and use `--dry-run` to
   review exactly what would be sent.
 
-## What the IR captures (v0.2.1)
+## What the IR captures (v0.3.0)
 
 - Jobs, workflows and dataflows; calls with their condition and the enclosing
   control construct (`branch`, `loop`, `error_handler`); variables, parameters, scripts.
@@ -262,7 +263,10 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DA
 - Lookup defaults, return policy and cache hint; Table Comparison key and compare
   columns; SCD2 column settings; generated key columns; where each script sits
   among the calls (0.2.1).
-- IR 0.1.0 and 0.2.0 JSON files still load (all new fields have defaults).
+- SSIS (0.3.0): task objects (Execute SQL, Script, ...), precedence constraints
+  (`depends_on`, `trigger`), variable expressions, connection managers as datastores
+  (secrets removed), SQL-command sources, and transforms that pass every input column on.
+- IR 0.1.0, 0.2.0 and 0.2.1 JSON files still load (all new fields have defaults).
 
 ## Layout
 
@@ -270,6 +274,7 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DA
 deltabound/
   ir.py             # the open IR (Pydantic models) - the core asset
   parsers/bods.py   # SAP Data Services XML export -> IR
+  parsers/ssis.py   # SSIS .dtsx packages -> IR
   graph.py          # call tree, dead code, column lineage, call depth, complexity, waves
   report.py         # markdown estate report
   explain/          # AI job explanations with citations (Anthropic), cached
@@ -281,6 +286,7 @@ viewer/             # static web viewer: Vite + React + React Flow + Pyodide
   cli.py            # command line
 demo/               # one folder per legacy source, each with a deltabound.toml (see demo/README.md)
   sap_bods/         # SYNTHETIC Fernhill Retail: exports/ (15 jobs, 30 workflows, 60 dataflows), validation/
+  ssis/             # SYNTHETIC Halden Outfitters: 4 SSIS packages
   sql_server/       # planned: SQL Server Agent jobs + T-SQL
 samples/bods_mini/  # SYNTHETIC small estate used by the original tests
 samples/ir/         # IR files from older versions (compatibility tests)
@@ -289,6 +295,9 @@ tests/
 
 ## Status and important notes
 
+- **The SSIS parser is unverified against real packages** in the same way: its element names
+  and component class IDs are constants in `parsers/ssis.py`. `convert` handles SAP Data
+  Services only and refuses SSIS rather than mistranslate its expressions.
 - **The BODS parser is unverified against real exports.** Tag names follow the
   general shape of BODS XML exports but must be checked against real files and
   the `TAG_*` constants adjusted. This includes the assumed layouts of joins,
@@ -304,7 +313,8 @@ tests/
 1. Validate the parser against a real (permitted) BODS export; expand transform coverage.
 2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity;
    conversion rules for file sources/targets, Validation and Map Operation.
-3. SSIS parser (deferred; docs/design/ssis.md).
+3. Conversion rules for SSIS (expression translator for the SSIS expression language).
+4. SQL Server Agent jobs + T-SQL source (demo/sql_server is laid out).
 
 ## License
 

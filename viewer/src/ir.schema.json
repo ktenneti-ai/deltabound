@@ -1,7 +1,7 @@
 {
   "$defs": {
     "Branch": {
-      "description": "One named output of a routing transform (Case, Conditional Split, ...).",
+      "description": "One named output of a transform (Case/Conditional Split branch, lookup no-match, error rows).\n\nNames are unique within a dataflow; other transforms list them in `inputs`.",
       "properties": {
         "condition": {
           "anyOf": [
@@ -60,6 +60,21 @@
           "default": null,
           "title": "Control"
         },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        },
         "order": {
           "default": 0,
           "title": "Order",
@@ -79,14 +94,28 @@
             }
           ],
           "default": null
+        },
+        "trigger": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger"
         }
       },
       "required": [
         "condition",
         "control",
+        "depends_on",
         "order",
         "target",
-        "target_kind"
+        "target_kind",
+        "trigger"
       ],
       "title": "CallStep",
       "type": "object"
@@ -139,6 +168,41 @@
       "title": "ColumnMapping",
       "type": "object"
     },
+    "Datastore": {
+      "description": "A connection the legacy tool uses (BODS datastore, SSIS connection manager). Never holds secrets.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Properties",
+          "type": "object"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        }
+      },
+      "required": [
+        "name",
+        "properties",
+        "type"
+      ],
+      "title": "Datastore",
+      "type": "object"
+    },
     "EtlObject": {
       "properties": {
         "calls": {
@@ -181,6 +245,18 @@
           "title": "Scripts",
           "type": "array"
         },
+        "task_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type"
+        },
         "transforms": {
           "items": {
             "$ref": "#/$defs/Transform"
@@ -203,6 +279,7 @@
         "name",
         "script_steps",
         "scripts",
+        "task_type",
         "transforms",
         "variables"
       ],
@@ -436,7 +513,8 @@
       "enum": [
         "job",
         "workflow",
-        "dataflow"
+        "dataflow",
+        "task"
       ],
       "title": "ObjectKind",
       "type": "string"
@@ -648,6 +726,11 @@
           "title": "Order By",
           "type": "array"
         },
+        "passes_through": {
+          "default": false,
+          "title": "Passes Through",
+          "type": "boolean"
+        },
         "raw_tag": {
           "anyOf": [
             {
@@ -659,6 +742,18 @@
           ],
           "default": null,
           "title": "Raw Tag"
+        },
+        "sql": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sql"
         },
         "table": {
           "anyOf": [
@@ -699,7 +794,9 @@
         "name",
         "options",
         "order_by",
+        "passes_through",
         "raw_tag",
+        "sql",
         "table",
         "where"
       ],
@@ -732,6 +829,18 @@
           "default": null,
           "title": "Default"
         },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expression"
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -745,6 +854,7 @@
       "required": [
         "data_type",
         "default",
+        "expression",
         "name",
         "scope"
       ],
@@ -753,8 +863,15 @@
     }
   },
   "properties": {
+    "datastores": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Datastore"
+      },
+      "title": "Datastores",
+      "type": "object"
+    },
     "ir_version": {
-      "default": "0.2.1",
+      "default": "0.3.0",
       "title": "Ir Version",
       "type": "string"
     },
@@ -790,6 +907,7 @@
     }
   },
   "required": [
+    "datastores",
     "ir_version",
     "objects",
     "source_tool",

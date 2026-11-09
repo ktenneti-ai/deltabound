@@ -13,7 +13,7 @@ export interface LoadEntry {
 
 export interface TreeNode {
   name: string;
-  kind: "job" | "workflow" | "dataflow" | "missing";
+  kind: "job" | "workflow" | "dataflow" | "task" | "missing";
   condition: string | null;
   control: "branch" | "loop" | "error_handler" | null;
   order: number;
@@ -30,7 +30,7 @@ export interface JobStat {
 }
 
 export interface Analysis {
-  counts: { job: number; workflow: number; dataflow: number; transforms: number; opaque: number };
+  counts: { job: number; workflow: number; dataflow: number; task: number; transforms: number; opaque: number };
   coverage: number;
   jobs: JobStat[]; // hardest first
   trees: Record<string, TreeNode>; // every job and workflow

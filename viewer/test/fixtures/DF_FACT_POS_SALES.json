@@ -6,6 +6,7 @@
   "name": "DF_FACT_POS_SALES",
   "script_steps": [],
   "scripts": [],
+  "task_type": null,
   "transforms": [
    {
     "branches": [],
@@ -22,7 +23,9 @@
     "name": "STG_POS_TXN",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIDatabaseTableSource",
+    "sql": null,
     "table": {
      "datastore": "DS_DWH",
      "owner": "STG",
@@ -96,7 +99,9 @@
     "name": "Q_POS_IN",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIQuery",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -133,7 +138,9 @@
     "name": "CASE_CHANNEL",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DICase",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -227,7 +234,9 @@
     "name": "Q_STORE",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIQuery",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -321,7 +330,9 @@
     "name": "Q_KIOSK",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIQuery",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -387,7 +398,9 @@
     "name": "Q_OTHER",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIQuery",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -410,7 +423,9 @@
     "name": "MRG_CHANNELS",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIMerge",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -433,7 +448,9 @@
      "loadMode": "append"
     },
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIDatabaseTableTarget",
+    "sql": null,
     "table": {
      "datastore": "DS_DWH",
      "owner": "MART",

@@ -89,7 +89,7 @@ def detect(name: str, data: bytes) -> tuple[str, str]:
 def load(files: list[tuple[str, bytes]]) -> dict:
     """Load any mix of supported files. Bad files are reported and skipped, never fatal."""
     rep: list[dict] = []
-    bods_docs, estate_docs, explanation_docs = [], [], []
+    bods_docs, ssis_docs, estate_docs, explanation_docs = [], [], [], []
     for name, data in _expand(files, rep):
         fmt, detail = detect(name, data)
         if fmt == "bods_xml":
@@ -99,7 +99,7 @@ def load(files: list[tuple[str, bytes]]) -> dict:
         elif fmt == "explanations_json":
             explanation_docs.append((name, data))
         elif fmt == "ssis":
-            rep.append(_entry(name, "ssis", "unsupported", "SSIS packages are recognised; SSIS support is planned."))
+            ssis_docs.append((name, data))
         elif fmt == "source_manifest":
             rep.append(_entry(name, "source_manifest", "skipped",
                               "source manifest: its settings are used by the command line; the viewer reads the export files"))
@@ -108,25 +108,34 @@ def load(files: list[tuple[str, bytes]]) -> dict:
                               "BODS ATL text exports are not supported yet; export the repository as XML."))
         else:
             rep.append(_entry(name, "unknown", "error",
-                              f"{detail}. Supported: estate.json, explanations.json, BODS .xml exports, .zip of these."))
+                              f"{detail}. Supported: estate.json, explanations.json, BODS .xml exports, SSIS .dtsx packages, .zip of these."))
 
     estate: Optional[Estate] = None
-    if bods_docs:
-        estate = Estate(source_tool=bods.SOURCE_TOOL)
+    raw_docs = []
+    if bods_docs and ssis_docs:  # one estate per tool: keep BODS, report the rest
+        for name, _ in ssis_docs:
+            rep.append(_entry(name, "ssis", "skipped", "SAP Data Services exports were also loaded; load one tool at a time"))
+        ssis_docs = []
+    if bods_docs or ssis_docs:
+        from .parsers import ssis
+
+        parser, fmt, docs = (bods, "bods_xml", bods_docs) if bods_docs else (ssis, "ssis", ssis_docs)
+        estate = Estate(source_tool=parser.SOURCE_TOOL)
         parsed = 0
-        for name, data in bods_docs:
+        for name, data in docs:
             try:
-                bods.parse_document(name, data, estate)
-                rep.append(_entry(name, "bods_xml", "ok"))
+                parser.parse_document(name, data, estate)
+                rep.append(_entry(name, fmt, "ok"))
                 parsed += 1
             except ET.ParseError as e:
-                rep.append(_entry(name, "bods_xml", "error", f"malformed XML: {e}"))
+                rep.append(_entry(name, fmt, "error", f"malformed XML: {e}"))
         if not parsed:
             estate = None
+        raw_docs = docs
         for name, _, _ in estate_docs:
             rep.append(_entry(name, "estate_json", "skipped",
                               "raw export files were also loaded; load one estate at a time"))
-    else:
+    if not raw_docs:
         for name, data, version in estate_docs:
             if estate is not None:
                 rep.append(_entry(name, "estate_json", "skipped", "another estate.json was already loaded"))

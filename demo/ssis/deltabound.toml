@@ -1,0 +1,34 @@
+# DeltaBound source manifest: everything about one legacy source lives in this folder.
+# Every command accepts the folder:  deltabound summary demo/ssis   ·   deltabound viewer demo/ssis
+
+[source]
+name = "Halden Outfitters: SQL Server Integration Services"
+type = "ssis"                   # sap_bods | ssis | sql_server
+status = "supported"
+exports = ["exports"]           # .dtsx packages (SSIS 2012+ package format)
+description = "SYNTHETIC packages of a fictional retailer: master package, sales, finance, an old export."
+input = "SSIS project folder or packages exported from the SSIS catalog / msdb as .dtsx files"
+
+[convert]                       # conversion rules cover SAP Data Services today; SSIS conversion is planned
+compute = "serverless"
+bundle_prefix = "halden"
+
+[convert.datastores]            # SSIS connection manager -> Unity Catalog catalog.schema
+"ERP" = "bronze.halden_erp"
+"DWH" = "silver.halden_dwh"
+
+[explain]
+provider = "anthropic"          # "fake" runs offline with placeholder text
+model = "claude-opus-5-5"
+effort = "high"
+max_tokens = 16000
+cache_dir = ".deltabound/explain"   # relative to this folder; audit.jsonl is written here too
+
+[explain.limits]                # hard caps per run; every run also needs a person's approval (docs/governance.md)
+max_calls = 100
+max_input_tokens = 1000000
+max_output_tokens = 2000000
+max_cost_usd = 25.0
+
+[validate]
+manifests = []                  # add validation/<job>/validation.toml when outputs are saved

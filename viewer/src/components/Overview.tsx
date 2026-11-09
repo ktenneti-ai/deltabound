@@ -12,6 +12,7 @@ export function Overview({ payload }: { payload: Payload }) {
     ["Jobs", a.counts.job],
     ["Workflows", a.counts.workflow],
     ["Dataflows", a.counts.dataflow],
+    ...(a.counts.task ? ([["Tasks", a.counts.task]] as [string, number][]) : []),
     ["Transforms", a.counts.transforms],
     ["Coverage", `${a.coverage}%`],
     ["Dead objects", a.unreachable.length],

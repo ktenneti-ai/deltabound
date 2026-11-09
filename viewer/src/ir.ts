@@ -5,24 +5,29 @@
  * and run json-schema-to-typescript to regenerate this file.
  */
 
+export type Name = string;
+export type Type = string | null;
 export type IrVersion = string;
 export type Condition = string | null;
 export type Control = string | null;
+export type DependsOn = number[] | null;
 export type Order = number;
 export type Target = string;
-export type ObjectKind = "job" | "workflow" | "dataflow";
+export type ObjectKind = "job" | "workflow" | "dataflow" | "task";
+export type Trigger = string | null;
 export type Calls = CallStep[];
 export type Description = string | null;
-export type Name = string;
+export type Name1 = string;
 export type AfterCall = number;
 export type Condition1 = string | null;
 export type Control1 = string | null;
 export type Index = number;
 export type ScriptSteps = ScriptStep[];
 export type Scripts = string[];
+export type TaskType = string | null;
 export type Condition2 = string | null;
 export type IsDefault = boolean;
-export type Name1 = string;
+export type Name2 = string;
 export type Branches = Branch[];
 export type Column = string;
 export type DataType = string | null;
@@ -53,20 +58,23 @@ export type OutputColumn = string | null;
 export type Policy = string | null;
 export type Raw = string | null;
 export type ReturnColumns = string[];
-export type Datastore = string | null;
+export type Datastore1 = string | null;
 export type Owner = string | null;
 export type Table = string;
 export type Lookups = LookupRef[];
-export type Name2 = string;
+export type Name3 = string;
 export type Direction = string;
 export type Expression1 = string;
 export type OrderBy = SortKey[];
+export type PassesThrough = boolean;
 export type RawTag = string | null;
+export type Sql = string | null;
 export type Where = string | null;
 export type Transforms = Transform[];
 export type DataType1 = string | null;
 export type Default = string | null;
-export type Name3 = string;
+export type Expression2 = string | null;
+export type Name4 = string;
 export type Scope = string;
 export type Variables = Variable[];
 export type SourceTool = string;
@@ -74,11 +82,26 @@ export type SourceVersion = string | null;
 export type Unparsed = string[];
 
 export interface Estate {
+  datastores: Datastores;
   ir_version: IrVersion;
   objects: Objects;
   source_tool: SourceTool;
   source_version: SourceVersion;
   unparsed: Unparsed;
+}
+export interface Datastores {
+  [k: string]: Datastore;
+}
+/**
+ * A connection the legacy tool uses (BODS datastore, SSIS connection manager). Never holds secrets.
+ */
+export interface Datastore {
+  name: Name;
+  properties: Properties;
+  type: Type;
+}
+export interface Properties {
+  [k: string]: string;
 }
 export interface Objects {
   [k: string]: EtlObject;
@@ -87,9 +110,10 @@ export interface EtlObject {
   calls: Calls;
   description: Description;
   kind: ObjectKind;
-  name: Name;
+  name: Name1;
   script_steps: ScriptSteps;
   scripts: Scripts;
+  task_type: TaskType;
   transforms: Transforms;
   variables: Variables;
 }
@@ -99,9 +123,11 @@ export interface EtlObject {
 export interface CallStep {
   condition: Condition;
   control: Control;
+  depends_on: DependsOn;
   order: Order;
   target: Target;
   target_kind: ObjectKind | null;
+  trigger: Trigger;
 }
 /**
  * Where a script sits in its object's flow (EtlObject.scripts keeps the texts).
@@ -124,20 +150,24 @@ export interface Transform {
   key_columns: KeyColumns;
   kind: Kind;
   lookups: Lookups;
-  name: Name2;
+  name: Name3;
   options: Options;
   order_by: OrderBy;
+  passes_through: PassesThrough;
   raw_tag: RawTag;
+  sql: Sql;
   table: TableRef | null;
   where: Where;
 }
 /**
- * One named output of a routing transform (Case, Conditional Split, ...).
+ * One named output of a transform (Case/Conditional Split branch, lookup no-match, error rows).
+ *
+ * Names are unique within a dataflow; other transforms list them in `inputs`.
  */
 export interface Branch {
   condition: Condition2;
   is_default: IsDefault;
-  name: Name1;
+  name: Name2;
 }
 /**
  * Output column of a transform and the expression that produces it.
@@ -179,7 +209,7 @@ export interface LookupRef {
   table: TableRef | null;
 }
 export interface TableRef {
-  datastore: Datastore;
+  datastore: Datastore1;
   owner: Owner;
   table: Table;
 }
@@ -193,6 +223,7 @@ export interface SortKey {
 export interface Variable {
   data_type: DataType1;
   default: Default;
-  name: Name3;
+  expression: Expression2;
+  name: Name4;
   scope: Scope;
 }

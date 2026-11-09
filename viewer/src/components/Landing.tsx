@@ -15,6 +15,7 @@ export function Landing(props: { boot: Boot; busy: boolean; error: string | null
         </p>
         <ul>
           <li>SAP Data Services (BODS) XML exports, one or many files</li>
+          <li>SSIS packages (.dtsx)</li>
           <li>a demo source folder (for example <code>demo/sap_bods</code>)</li>
           <li>
             <code>estate.json</code> from <code>deltabound export</code>

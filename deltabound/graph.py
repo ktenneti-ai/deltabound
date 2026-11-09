@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import networkx as nx
 
-from .ir import Estate, ObjectKind
+from .ir import Estate, ObjectKind, Transform
 
 
 def call_graph(estate: Estate) -> nx.DiGraph:
@@ -22,17 +22,18 @@ def tree_lines(estate: Estate, root: str) -> list[str]:
     """Indented text view of everything a job runs, with conditions."""
     lines: list[str] = []
 
-    def walk(name: str, depth: int, cond: str | None, seen: frozenset[str]) -> None:
+    def walk(name: str, depth: int, cond: str | None, control: str | None, seen: frozenset[str]) -> None:
         obj = estate.objects.get(name)
         kind = obj.kind.value if obj else "MISSING"
-        suffix = f"   [if {cond}]" if cond else ""
+        # Loop and error-handler conditions already say what they are ("while ...", "on error ...").
+        suffix = f"   [{cond}]" if cond and control in ("loop", "error_handler") else f"   [if {cond}]" if cond else ""
         lines.append(f"{'  ' * depth}{kind}: {name}{suffix}")
         if obj is None or name in seen:
             return
         for c in sorted(obj.calls, key=lambda c: c.order):
-            walk(c.target, depth + 1, c.condition, seen | {name})
+            walk(c.target, depth + 1, c.condition, c.control, seen | {name})
 
-    walk(root, 0, None, frozenset())
+    walk(root, 0, None, None, frozenset())
     return lines
 
 
@@ -97,47 +98,56 @@ PASS_THROUGH_KINDS = {
 TARGET_KINDS = {"table_target", "file_target"}
 
 
+def carries(t: Transform) -> bool:
+    """Does the transform pass its input columns on (besides any columns it defines)?"""
+    return t.passes_through or (not t.columns and t.kind in PASS_THROUGH_KINDS)
+
+
 def column_lineage(estate: Estate, dataflow: str) -> nx.DiGraph:
     """Column-level lineage inside one dataflow: 'transform.column' nodes.
 
-    Targets are named by their qualified table. Lineage passes through
-    PASS_THROUGH_KINDS transforms and Case branch outputs; it stops at opaque
-    transforms, whose behaviour is unknown.
+    Targets are named by their qualified table. Lineage passes through transforms
+    that carry their inputs (Transform.passes_through, or BODS pass-through kinds)
+    and through named branch outputs; it stops at opaque transforms.
     """
     df = estate.objects[dataflow]
-    by_name = {t.name: t for t in df.transforms}
+    by_name = {t.name: t for t in df.transforms if t.kind not in TARGET_KINDS}
     branch_owner = {b.name: t.name for t in df.transforms for b in t.branches}
 
     def out_cols(output: str, seen: frozenset[str]) -> list[str]:
-        """Columns available at a transform output or a Case branch."""
+        """Columns available at a transform output or a named branch."""
         tr = by_name.get(branch_owner.get(output, output))
         if tr is None or tr.name in seen:
             return []
-        if tr.columns:
-            return [c.column for c in tr.columns]
-        if tr.kind not in PASS_THROUGH_KINDS:
-            return []
-        cols = [c for i in tr.inputs for c in out_cols(i, seen | {tr.name})]
-        cols += [r for lk in tr.lookups if lk.output_column is None for r in lk.return_columns]
+        cols = [c.column for c in tr.columns]
+        if carries(tr):
+            cols += [c for i in tr.inputs for c in out_cols(i, seen | {tr.name})]
+            cols += [r for lk in tr.lookups if lk.output_column is None for r in lk.return_columns]
         return list(dict.fromkeys(cols))
 
     g = nx.DiGraph()
     for tr in df.transforms:
+        own = {c.column for c in tr.columns}
         for col in tr.columns:
             node = f"{tr.name}.{col.column}"
             g.add_node(node, expression=col.expression)
             for src in col.source_columns:
                 g.add_edge(src, node)
-        if tr.columns or tr.kind not in PASS_THROUGH_KINDS | TARGET_KINDS:
+        if tr.kind in TARGET_KINDS:
+            out = tr.table.qualified if tr.table else tr.name
+            for i in tr.inputs:
+                for c in out_cols(i, frozenset()):
+                    g.add_edge(f"{i}.{c}", f"{out}.{c}")
             continue
-        out = (tr.table.qualified if tr.table else tr.name) if tr.kind in TARGET_KINDS else tr.name
-        for i in tr.inputs:
-            for c in out_cols(i, frozenset()):
-                g.add_edge(f"{i}.{c}", f"{out}.{c}")
-        for lk in tr.lookups:
-            if lk.output_column is None and lk.table is not None:
-                for r in lk.return_columns:
-                    g.add_edge(f"{lk.table.qualified}.{r}", f"{out}.{r}")
+        if carries(tr):
+            for i in tr.inputs:
+                for c in out_cols(i, frozenset({tr.name})):
+                    if c not in own:
+                        g.add_edge(f"{i}.{c}", f"{tr.name}.{c}")
+            for lk in tr.lookups:
+                if lk.output_column is None and lk.table is not None:
+                    for r in lk.return_columns:
+                        g.add_edge(f"{lk.table.qualified}.{r}", f"{tr.name}.{r}")
         for b in tr.branches:
             for c in out_cols(tr.name, frozenset()):
                 g.add_edge(f"{tr.name}.{c}", f"{b.name}.{c}")
@@ -146,21 +156,28 @@ def column_lineage(estate: Estate, dataflow: str) -> nx.DiGraph:
 
 def output_columns(estate: Estate, dataflow: str, output: str,
                    _seen: frozenset[str] = frozenset()) -> list[tuple[str, str | None]] | None:
-    """(column, legacy data type) available at a transform output or Case branch.
+    """(column, legacy data type) available at a transform output or named branch.
 
-    Follows transforms that pass columns through unchanged; None when unknown
-    (opaque transforms, sources without declared columns, cycles).
+    Follows transforms that carry their inputs; None when unknown (opaque transforms,
+    sources without declared columns, BODS lookup return columns, cycles).
     """
     df = estate.objects[dataflow]
     owner = {b.name: t.name for t in df.transforms for b in t.branches}.get(output, output)
     t = next((x for x in df.transforms if x.name == owner and x.kind not in TARGET_KINDS), None)
     if t is None or t.name in _seen:
         return None
-    if t.columns:
-        return [(c.column, c.data_type) for c in t.columns]
-    if t.kind in PASS_THROUGH_KINDS - {"lookup"} and t.inputs:
-        return output_columns(estate, dataflow, t.inputs[0], _seen | {t.name})
-    return None
+    own = [(c.column, c.data_type) for c in t.columns]
+    if not carries(t):
+        return own or None
+    if t.kind == "lookup" and not t.passes_through:  # BODS lookup adds untyped return columns
+        return None
+    if not t.inputs:
+        return own or None
+    upstream = output_columns(estate, dataflow, t.inputs[0], _seen | {t.name})
+    if upstream is None:
+        return None
+    names = {c for c, _ in own}
+    return own + [(c, ty) for c, ty in upstream if c not in names]
 
 
 def trace_column(estate: Estate, dataflow: str, column_node: str) -> list[str]:
@@ -171,6 +188,8 @@ def trace_column(estate: Estate, dataflow: str, column_node: str) -> list[str]:
 
 
 COMPLEXITY_WEIGHTS = {
+    "derived_column": 1, "join": 2, "aggregate": 1, "sort": 1, "data_conversion": 1, "multicast": 1,
+    "row_count": 0, "scd": 4, "sql_command": 3,
     "query": 1, "lookup": 2, "case": 2, "merge": 2, "validation": 2,
     "table_comparison": 3, "history_preserving": 4, "key_generation": 1,
     "map_operation": 2, "opaque": 5,

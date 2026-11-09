@@ -14,7 +14,8 @@ Python package and CLI name: `deltabound`.
 - `deltabound/ir.py` — Pydantic models for the IR. The core asset. Every change must be
   backward compatible or bump IR_VERSION, and must stay tool-neutral (no BODS-only fields;
   use generic names and keep tool-specific details in optional fields).
-- `deltabound/parsers/<tool>.py` — one parser per legacy tool. Parsers only read export
+- `deltabound/parsers/<tool>.py` — one parser per legacy tool: `bods.py` (SAP Data Services XML)
+  and `ssis.py` (.dtsx); both unverified against real exports, names kept in constants. Parsers only read export
   files and produce an `Estate`. They never connect to a live system.
 - `deltabound/graph.py` — analysis over the IR only. Never imports a parser.
 - `deltabound/report.py` — markdown estate report; reads the IR and graph.py only.
@@ -44,7 +45,8 @@ Python package and CLI name: `deltabound`.
   exact integers, decimals within 0.005, surrogate keys ignored when the IR shows Key Generation,
   sign-off lives in the report only. Numbers are compared widened (DECIMAL(38,9)), never after a
   rounding cast.
-- SSIS is deferred. Design docs are in `docs/design/`.
+- convert handles SAP Data Services only (SUPPORTED_TOOLS in convert/job.py); SSIS conversion and
+  the SQL Server (Agent jobs + T-SQL) parser are next. Design docs are in `docs/design/`.
 
 ## Rules
 - Outside API calls exist only in `explain/provider.py` and must go through `explain/governance.py`
@@ -66,7 +68,7 @@ Python package and CLI name: `deltabound`.
 - Keep the README quick start working after every change.
 
 ## Current state (updated 2026-11-09)
-- IR_VERSION 0.2.1. `samples/ir/estate_v0.1.0.json` and `estate_v0.2.0.json` must keep loading;
+- IR_VERSION 0.3.0 (SSIS). `samples/ir/estate_v0.1.0.json`, `_v0.2.0` and `_v0.2.1` must keep loading;
   when bumping the IR again, add an export from the previous version there.
 - Transform names are unique within a dataflow (the parser renames a clashing target to
   `<TABLE>_TARGET`); code may rely on that.

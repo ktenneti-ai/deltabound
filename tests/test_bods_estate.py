@@ -130,7 +130,7 @@ def test_parameters_get_parameter_scope():
 
 def test_tree_shows_error_handler_condition():
     lines = graph.tree_lines(_estate(), "JOB_SALES_DAILY")
-    assert "    dataflow: DF_CTL_JOB_ERROR   [if on error (ALL)]" in lines
+    assert "    dataflow: DF_CTL_JOB_ERROR   [on error (ALL)]" in lines
     assert not any("DITryCatch" in l for l in lines)
 
 

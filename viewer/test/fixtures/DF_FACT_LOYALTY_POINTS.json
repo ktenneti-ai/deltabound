@@ -6,6 +6,7 @@
   "name": "DF_FACT_LOYALTY_POINTS",
   "script_steps": [],
   "scripts": [],
+  "task_type": null,
   "transforms": [
    {
     "branches": [],
@@ -22,7 +23,9 @@
     "name": "STG_LOYALTY_TXN",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIDatabaseTableSource",
+    "sql": null,
     "table": {
      "datastore": "DS_DWH",
      "owner": "STG",
@@ -80,7 +83,9 @@
     "name": "Q_TXN",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIQuery",
+    "sql": null,
     "table": null,
     "where": null
    },
@@ -126,7 +131,9 @@
     "name": "LKP_MEMBER_KEY",
     "options": {},
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DILookup",
+    "sql": null,
     "table": {
      "datastore": "DS_DWH",
      "owner": "MART",
@@ -153,7 +160,9 @@
      "loadMode": "append"
     },
     "order_by": [],
+    "passes_through": false,
     "raw_tag": "DIDatabaseTableTarget",
+    "sql": null,
     "table": {
      "datastore": "DS_DWH",
      "owner": "MART",

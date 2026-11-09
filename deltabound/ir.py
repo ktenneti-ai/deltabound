@@ -16,20 +16,31 @@ from pydantic import BaseModel, Field
 # 0.2.1: adds LookupRef.default_values/policy/cache and Transform.key_columns/
 # compare_columns/history/generated_key and EtlObject.script_steps (needed by
 # convert/). Additive only.
-IR_VERSION = "0.2.1"
+# 0.3.0: SSIS support (docs/design/ssis.md): ObjectKind.TASK + EtlObject.task_type,
+# CallStep.depends_on/trigger, Variable.expression, Estate.datastores, Transform.sql and
+# Transform.passes_through. Additive: every 0.2.x file still loads.
+IR_VERSION = "0.3.0"
+
+# Transform kinds in use (free strings; parsers map their tool's components onto these):
+#   table_source table_target file_source file_target query lookup case merge validation
+#   table_comparison history_preserving key_generation map_operation        (SAP Data Services)
+#   derived_column join aggregate sort data_conversion multicast row_count scd sql_command (SSIS)
+#   opaque: a component the parser does not model (listed in Estate.unparsed)
 
 
 class ObjectKind(str, Enum):
     JOB = "job"
     WORKFLOW = "workflow"
     DATAFLOW = "dataflow"
+    TASK = "task"  # an executable step that is not a dataflow (SQL, script, file, mail, ...)
 
 
 class Variable(BaseModel):
     name: str
-    scope: str = "global"  # global | local | parameter
+    scope: str = "global"  # global | local | parameter | package | project | system
     data_type: Optional[str] = None
     default: Optional[str] = None
+    expression: Optional[str] = None  # value computed from an expression at run time
 
 
 class CallStep(BaseModel):
@@ -41,6 +52,10 @@ class CallStep(BaseModel):
     # Innermost enclosing control construct: None | "branch" | "loop" | "error_handler"
     control: Optional[str] = None
     order: int = 0
+    # None: runs after the previous step (sequential tools such as BODS). A list: the `order`
+    # values of the steps it waits for (a precedence graph, e.g. SSIS); [] means it starts at once.
+    depends_on: Optional[list[int]] = None
+    trigger: Optional[str] = None  # with depends_on: "success" | "failure" | "completion"
 
 
 class TableRef(BaseModel):
@@ -76,7 +91,10 @@ class SortKey(BaseModel):
 
 
 class Branch(BaseModel):
-    """One named output of a routing transform (Case, Conditional Split, ...)."""
+    """One named output of a transform (Case/Conditional Split branch, lookup no-match, error rows).
+
+    Names are unique within a dataflow; other transforms list them in `inputs`.
+    """
 
     name: str
     condition: Optional[str] = None
@@ -123,6 +141,8 @@ class Transform(BaseModel):
     compare_columns: list[str] = Field(default_factory=list)  # columns compared for changes (empty = all non-key)
     history: Optional[HistorySettings] = None  # set on history-preserving (SCD2) transforms
     generated_key: Optional[str] = None  # column a key-generation transform fills
+    sql: Optional[str] = None  # free SQL the transform runs (SQL-command sources, SQL transforms)
+    passes_through: bool = False  # also outputs every input column it does not redefine (SSIS style)
     options: dict[str, str] = Field(default_factory=dict)  # tool-specific extras (load mode, ...)
     raw_tag: Optional[str] = None  # original element name, kept for opaque nodes
 
@@ -136,10 +156,19 @@ class ScriptStep(BaseModel):
     control: Optional[str] = None  # same meaning as CallStep.control
 
 
+class Datastore(BaseModel):
+    """A connection the legacy tool uses (BODS datastore, SSIS connection manager). Never holds secrets."""
+
+    name: str
+    type: Optional[str] = None  # e.g. OLEDB, FLATFILE, SAP
+    properties: dict[str, str] = Field(default_factory=dict)  # server, database, file path ...
+
+
 class EtlObject(BaseModel):
     name: str
     kind: ObjectKind
     description: Optional[str] = None
+    task_type: Optional[str] = None  # for kind=task: sql | script | file | mail | process | other
     variables: list[Variable] = Field(default_factory=list)
     calls: list[CallStep] = Field(default_factory=list)
     transforms: list[Transform] = Field(default_factory=list)
@@ -152,6 +181,7 @@ class Estate(BaseModel):
     source_tool: str
     source_version: Optional[str] = None
     objects: dict[str, EtlObject] = Field(default_factory=dict)
+    datastores: dict[str, Datastore] = Field(default_factory=dict)
     unparsed: list[str] = Field(default_factory=list)  # tags we could not model
 
     def by_kind(self, kind: ObjectKind) -> list[EtlObject]:

@@ -29,7 +29,14 @@ def _load(paths: list[str]):
             sys.exit(f"deltabound: {e}")
     files: list[Path] = []
     for p in map(Path, paths):
-        files += sorted(p.rglob("*.xml")) if p.is_dir() else [p]
+        files += sorted([*p.rglob("*.xml"), *p.rglob("*.dtsx")]) if p.is_dir() else [p]
+    ssis_files = [f for f in files if f.suffix.lower() == ".dtsx"]
+    if ssis_files and len(ssis_files) != len(files):
+        sys.exit("deltabound: these paths mix SSIS packages (.dtsx) and other exports; load one tool at a time")
+    if ssis_files:
+        from .parsers import ssis
+
+        return ssis.parse_files(ssis_files)
     return bods.parse_files(files)
 
 
@@ -109,7 +116,10 @@ def cmd_convert(a) -> None:
     if out.exists() and not out.is_dir():
         sys.exit(f"convert: --out {out} exists and is not a folder")
     for j in jobs:
-        r = convert_job(e, j, cfg)
+        try:
+            r = convert_job(e, j, cfg)
+        except ConvertError as err:
+            sys.exit(f"convert: {err}")
         base = out / j if a.all else out
         for rel, text in r.files.items():
             path = base / rel

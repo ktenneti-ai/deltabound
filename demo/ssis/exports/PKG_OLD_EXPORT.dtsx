@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- SYNTHETIC SSIS package for development only. Halden Outfitters is a fictional company. -->
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:ObjectName="PKG_OLD_EXPORT" DTS:ExecutableType="Microsoft.Package" DTS:CreationName="Microsoft.Package">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers />
+  <DTS:Variables />
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\EPT Archive" DTS:ObjectName="EPT Archive" DTS:ExecutableType="Microsoft.ExecutePackageTask">
+      <DTS:ObjectData>
+        <ExecutePackageTask>
+          <PackageName>PKG_ARCHIVE.dtsx</PackageName>
+        </ExecutePackageTask>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Mark Exported" DTS:ObjectName="SQL Mark Exported" DTS:ExecutableType="Microsoft.ExecuteSQLTask">
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="Package.ConnectionManagers[DWH]" SQLTask:SqlStatementSource="UPDATE ctl.Exports SET Done = 1" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:From="Package\EPT Archive" DTS:To="Package\SQL Mark Exported" DTS:Value="0" DTS:EvalOp="2" DTS:LogicalAnd="True" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>
