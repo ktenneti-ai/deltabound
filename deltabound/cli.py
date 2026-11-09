@@ -95,6 +95,52 @@ def cmd_convert(a) -> None:
         print(f"{j}: {done}/{len(transforms)} transforms converted, {r.todo_count} blocking TODO(s) -> {base}/conversion_report.md")
 
 
+def cmd_validate_scaffold(a) -> None:
+    from .convert import load_convert_config
+    from .validate import scaffold
+
+    e = _load(a.paths)
+    if a.job not in e.objects or e.objects[a.job].kind != ObjectKind.JOB:
+        sys.exit(f"Not a job in this export: {a.job}")
+    text = scaffold(e, a.job, load_convert_config(Path(a.config) if a.config else None), a.business_date)
+    Path(a.out).write_text(text)
+    print(f"Wrote {a.out} ({text.count('[[steps]]')} steps). Review keys, ignored columns and paths before running.")
+
+
+def cmd_validate_run(a) -> None:
+    from .validate import (DuckDBEngine, ValidateError, dumps, load_manifest, render_html, render_markdown,
+                           run_validation)
+
+    try:
+        m = load_manifest(Path(a.manifest), Path(a.waivers) if a.waivers else None)
+        sources = a.estate or [str(m.base / p) for p in m.estate]
+        if not sources:
+            sys.exit("validate: no legacy export given (set estate = [...] in the manifest or pass --estate)")
+        e = _load(sources)
+        if a.engine == "spark":
+            from pyspark.sql import SparkSession
+
+            from .validate import SparkEngine
+
+            engine = SparkEngine(SparkSession.builder.getOrCreate())
+        else:
+            engine = DuckDBEngine()
+        report = json.loads(Path(a.conversion_report).read_text()) if a.conversion_report else None
+        run = run_validation(e, m, engine, conversion_report=report)
+    except ValidateError as err:
+        sys.exit(f"validate: {err}")
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "result.json").write_text(dumps(run))
+    (out / "report.md").write_text(render_markdown(run))
+    (out / "report.html").write_text(render_html(run))
+    from .validate.report import LABEL, headline
+
+    print(f"{LABEL[run.status]}: {headline(run)}. Report: {out / 'report.html'}")
+    if run.status == "fail":
+        sys.exit(1)
+
+
 def schema_json() -> str:
     """JSON Schema of the IR as serialised (model_dump always writes every field, defaults included)."""
     from .ir import Estate
@@ -178,6 +224,24 @@ def main(argv: list[str] | None = None) -> None:
     which.add_argument("--all", action="store_true", help="convert every job (one bundle per job)")
     s.add_argument("--out", required=True, help="output folder")
     s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
+
+    v = sub.add_parser("validate", help="compare legacy outputs with the converted pipeline, step by step")
+    vsub = v.add_subparsers(dest="vcmd", required=True)
+    vs = vsub.add_parser("scaffold", help="draft validation.toml for a job from the IR")
+    vs.add_argument("paths", nargs="+", help="export files or folders")
+    vs.add_argument("--job", required=True)
+    vs.add_argument("--out", default="validation.toml")
+    vs.add_argument("--business-date", default="YYYY-MM-DD")
+    vs.add_argument("--config", help="deltabound.toml with [convert.datastores] for Databricks table names")
+    vs.set_defaults(fn=cmd_validate_scaffold)
+    vr = vsub.add_parser("run", help="run the comparisons and write result.json, report.md, report.html")
+    vr.add_argument("manifest")
+    vr.add_argument("--estate", nargs="+", help="legacy export files/folders (default: estate in the manifest)")
+    vr.add_argument("--engine", choices=["duckdb", "spark"], default="duckdb")
+    vr.add_argument("--out", default="validation_out")
+    vr.add_argument("--waivers", help="extra waivers TOML ([[waivers]] entries)")
+    vr.add_argument("--conversion-report", help="conversion_report.json from deltabound convert")
+    vr.set_defaults(fn=cmd_validate_run)
 
     sc = sub.add_parser("schema", help="write the IR JSON Schema (used by the viewer's TypeScript types)")
     sc.add_argument("--out", default="ir.schema.json")

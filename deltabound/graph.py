@@ -144,6 +144,25 @@ def column_lineage(estate: Estate, dataflow: str) -> nx.DiGraph:
     return g
 
 
+def output_columns(estate: Estate, dataflow: str, output: str,
+                   _seen: frozenset[str] = frozenset()) -> list[tuple[str, str | None]] | None:
+    """(column, legacy data type) available at a transform output or Case branch.
+
+    Follows transforms that pass columns through unchanged; None when unknown
+    (opaque transforms, sources without declared columns, cycles).
+    """
+    df = estate.objects[dataflow]
+    owner = {b.name: t.name for t in df.transforms for b in t.branches}.get(output, output)
+    t = next((x for x in df.transforms if x.name == owner and x.kind not in TARGET_KINDS), None)
+    if t is None or t.name in _seen:
+        return None
+    if t.columns:
+        return [(c.column, c.data_type) for c in t.columns]
+    if t.kind in PASS_THROUGH_KINDS - {"lookup"} and t.inputs:
+        return output_columns(estate, dataflow, t.inputs[0], _seen | {t.name})
+    return None
+
+
 def trace_column(estate: Estate, dataflow: str, column_node: str) -> list[str]:
     g = column_lineage(estate, dataflow)
     if column_node not in g:

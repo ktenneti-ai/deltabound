@@ -150,6 +150,43 @@ is only known at run time. The tests run the generated notebooks on local Spark
 with Delta: `pip install -e ".[spark]"`, Java 17+, then
 `pytest -m spark`. `pytest -m "not spark"` skips them.
 
+## Validation and sign-off
+
+`deltabound validate` compares the legacy job's saved outputs with the converted
+pipeline's outputs, step by step and in call order. It then writes a sign-off
+report.
+
+```bash
+pip install -e ".[validate]"                               # DuckDB for local runs
+deltabound validate scaffold samples/bods --job JOB_SALES_DAILY --out validation.toml
+deltabound validate run samples/validate/JOB_SALES_DAILY/validation.toml \
+    --waivers samples/validate/JOB_SALES_DAILY/waivers.toml --out validation_out
+# -> validation_out/report.html, report.md, result.json; exit code 1 when a step fails
+```
+
+- **Checks per step:**
+  - Schema: missing or extra columns, and types and decimal scale against the IR.
+  - Row counts.
+  - Keys: duplicates, and rows found on only one side.
+  - Values on matched keys: decimals within 0.005 by default, integers exact,
+    strings trimmed, `''` treated as NULL.
+  - Without keys, whole rows are compared as multisets.
+- **What the scaffold guesses from the IR:**
+  - Business keys, taken from Table Comparison keys.
+  - Columns to ignore: surrogate keys (including ones looked up from dimensions)
+    and SCD2 date columns.
+  - A "current rows only" filter for SCD2 tables.
+- **Root causes:** a failing step that reads an earlier failing step's table is
+  marked *cascading*, and the report points at the first failing step. Column
+  differences come with lineage hints showing where the column is computed.
+- **Waivers:** each has a reason, an approver and an expiry date. Expired
+  waivers are listed but not applied.
+- **Report:** inputs are fingerprinted (file SHA-256 or Delta table version),
+  and the report ends with a sign-off block.
+- **Engines:** `--engine duckdb` reads CSV and Parquet files. `--engine spark`
+  also reads tables, for use on Databricks. Both run the same SQL, and a test
+  checks that their results are identical.
+
 ## Job explanations (AI)
 
 `deltabound explain` writes a plain-English summary of a job (purpose, inputs,
@@ -214,11 +251,13 @@ deltabound/
   explain/          # AI job explanations with citations (Anthropic), cached
   bridge.py         # entry points for the web viewer (bytes in, JSON out)
   convert/          # IR -> Databricks notebooks + Asset Bundle + conversion report
+  validate/         # step-level legacy vs Databricks comparison + sign-off report
 viewer/             # static web viewer: Vite + React + React Flow + Pyodide
   cli.py            # command line
 samples/bods/       # SYNTHETIC estate, fictional Fernhill Retail: 15 jobs, 30 workflows, 60 dataflows
 samples/bods_mini/  # SYNTHETIC small estate used by the original tests
 samples/ir/         # IR files from older versions (compatibility tests)
+samples/validate/   # SYNTHETIC legacy/Databricks outputs and a validation manifest
 tests/
 ```
 
@@ -239,8 +278,7 @@ tests/
 1. Validate the parser against a real (permitted) BODS export; expand transform coverage.
 2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity;
    conversion rules for file sources/targets, Validation and Map Operation.
-3. Step-level data validation and sign-off report (docs/design/validate.md).
-4. SSIS parser (deferred; docs/design/ssis.md).
+3. SSIS parser (deferred; docs/design/ssis.md).
 
 ## License
 

@@ -1,0 +1,67 @@
+# SYNTHETIC validation sample for JOB_SALES_DAILY (fictional Fernhill Retail).
+# Started from `deltabound validate scaffold`, then reviewed: keys set for staging tables,
+# Databricks paths point at local Parquet so the duckdb engine can run it.
+# Steps are deliberately out of call order here; the run sorts them by the job's call order.
+job = "JOB_SALES_DAILY"
+business_date = "2026-10-31"
+estate = ["../../bods"]
+
+[defaults]
+numeric_abs = 0.005
+numeric_rel = 0.0
+timestamp_seconds = 0
+trim = true
+case_sensitive = true
+empty_is_null = true
+ignore_columns = []
+max_sample_rows = 20
+mask_columns = []
+row_count_abs = 0
+row_count_pct = 0.0
+
+[[steps]]
+dataflow = "DF_AGG_SALES_DAILY"
+target = "DS_DWH.MART.AGG_SALES_DAILY"
+keys = []  # keyless: compared as whole rows
+legacy = { path = "legacy/agg_sales_daily.csv", delimiter = ";" }
+databricks = { path = "databricks/agg_sales_daily.parquet" }
+
+[[steps]]
+dataflow = "DF_STG_ORDERS_DELTA"
+target = "DS_DWH.STG.STG_ORDERS"
+keys = ["ORDER_ID"]
+legacy = { path = "legacy/stg_orders.csv", delimiter = ";" }
+databricks = { path = "databricks/stg_orders.parquet" }
+
+[[steps]]
+dataflow = "DF_STG_ORDER_ITEMS"
+target = "DS_DWH.STG.STG_ORDER_ITEMS"
+keys = ["ORDER_ID", "LINE_NO"]
+legacy = { path = "legacy/stg_order_items.csv", delimiter = ";" }
+databricks = { path = "databricks/stg_order_items.parquet" }
+
+[[steps]]
+# ignored CUSTOMER_KEY, PRODUCT_KEY: surrogate keys looked up from DIM_CUSTOMER / DIM_PRODUCT
+dataflow = "DF_FACT_SALES"
+target = "DS_DWH.MART.FACT_SALES"
+keys = ["ORDER_ID", "LINE_NO"]
+ignore_columns = ["CUSTOMER_KEY", "PRODUCT_KEY"]
+legacy = { path = "legacy/fact_sales.csv", delimiter = ";" }
+databricks = { path = "databricks/fact_sales.parquet" }
+
+[[steps]]
+# SCD2 (HP_CUST): compare current rows only; VALID_FROM/VALID_TO depend on the load date
+dataflow = "DF_DIM_CUSTOMER"
+target = "DS_DWH.MART.DIM_CUSTOMER"
+keys = ["CUSTOMER_ID"]
+ignore_columns = ["CUSTOMER_KEY", "VALID_FROM", "VALID_TO"]
+legacy = { path = "legacy/dim_customer.csv", delimiter = ";", filter = "IS_CURRENT = '1'" }
+databricks = { path = "databricks/dim_customer.parquet", filter = "IS_CURRENT = '1'" }
+
+[[steps]]
+dataflow = "DF_DIM_PRODUCT"
+target = "DS_DWH.MART.DIM_PRODUCT"
+keys = ["PRODUCT_ID"]
+ignore_columns = ["PRODUCT_KEY"]
+legacy = { path = "legacy/dim_product.csv", delimiter = ";" }
+databricks = { path = "databricks/dim_product.parquet" }

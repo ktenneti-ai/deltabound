@@ -38,7 +38,13 @@ Python package and CLI name: `deltabound`.
   CURRENT_FLAG='Y'/9999-12-31 when the export names none, serverless compute.
   Golden output in tests/golden/convert (refresh: DELTABOUND_UPDATE_GOLDEN=1, review the diff).
   tests/test_convert_spark.py runs generated notebooks on local Spark (marker `spark`).
-- Next: `validate/`. SSIS is deferred. Design docs are in `docs/design/`.
+- `deltabound/validate/` — step-level comparison + sign-off report. Reads the IR only.
+  Manifest is TOML (validation.toml, waivers). Engines: DuckDB (extra `validate`) and Spark run
+  the same generated SQL; tests/test_validate_spark.py checks they agree. Decided 2026-11-09:
+  exact integers, decimals within 0.005, surrogate keys ignored when the IR shows Key Generation,
+  sign-off lives in the report only. Numbers are compared widened (DECIMAL(38,9)), never after a
+  rounding cast.
+- SSIS is deferred. Design docs are in `docs/design/`.
 
 ## Rules
 - Unknown or unsupported elements become `opaque` transforms and are listed in

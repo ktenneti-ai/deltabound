@@ -1,0 +1,16 @@
+# SYNTHETIC waivers: accepted, explained differences.
+[[waivers]]
+dataflow = "DF_STG_ORDER_ITEMS"
+check = "values"
+column = "LINE_NET"
+reason = "Legacy rounds line net per unit; Databricks rounds per line. Agreed with finance."
+approved_by = "Data owner, Sales (fictional)"
+expires = 2027-06-30
+
+[[waivers]]
+dataflow = "DF_AGG_SALES_DAILY"
+check = "schema"
+column = "TOTAL_AMOUNT"
+reason = "Temporary: scale fix scheduled"
+approved_by = "Migration lead (fictional)"
+expires = 2026-01-31

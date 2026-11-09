@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .. import graph
 from ..ir import Estate, EtlObject, LookupRef, Transform
 from .config import ConvertConfig
 from .expressions import q, strip_outer_parens, translate
@@ -459,16 +460,10 @@ def scd_cell(ctx: Context, ch: ScdChain) -> Cell:
 
 # ---------- target table DDL ----------
 
-def _columns_of(ctx: Context, output: str, seen: frozenset[str] = frozenset()) -> Optional[list[tuple[str, Optional[str]]]]:
-    """Typed columns at a transform output, following pass-through transforms; None if unknown."""
-    t = ctx.by_name.get(ctx.branch_owner.get(output, output))
-    if t is None or t.name in seen:
-        return None
-    if t.columns:
-        return [(c.column, spark_type(c.data_type)) for c in t.columns]
-    if t.kind in ("case", "merge", "table_comparison", "history_preserving", "key_generation", "validation") and t.inputs:
-        return _columns_of(ctx, t.inputs[0], seen | {t.name})
-    return None
+def _columns_of(ctx: Context, output: str) -> Optional[list[tuple[str, Optional[str]]]]:
+    """Typed (Spark) columns at a transform output; None if unknown."""
+    cols = graph.output_columns(ctx.estate, ctx.df.name, output)
+    return None if cols is None else [(c, spark_type(t)) for c, t in cols]
 
 
 def _add_ddl(ctx: Context, table: str, cols: Optional[list[tuple[str, Optional[str]]]], res: TransformResult,

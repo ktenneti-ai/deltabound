@@ -1,6 +1,14 @@
 # Design: step-level data validation (`deltabound/validate/`)
 
-Status: DESIGN DOC, awaiting review. No code yet. Author: Claude for Kishore Tenneti, 2026-11-09.
+Status: IMPLEMENTED 2026-11-09 (milestones 1-4, Spark engine of 5). Decisions and departures:
+- Decided: DuckDB as optional extra; exact integers, decimals within 0.005; surrogate keys ignored
+  when the IR shows Key Generation (also when looked up from a dimension); sign-off in the report.
+- Manifest and waivers are TOML, not YAML: read by the standard library, no new dependency.
+- Column profiles for keyless steps were not built; keyless steps use the exact multiset check.
+- Not built yet: the Databricks notebook wrapper (use the Python API with SparkEngine there).
+- Numbers are compared after widening both sides to DECIMAL(38,9)/DOUBLE: casting legacy values
+  to the new column type first would round real differences away.
+- CSV readers return NULL for empty fields, so '' vs NULL cannot be distinguished for CSV inputs.
 
 ## 1. Goal
 

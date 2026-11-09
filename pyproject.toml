@@ -15,6 +15,7 @@ dependencies = ["pydantic>=2.5", "networkx>=3.2"]
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 explain = ["anthropic>=2.6"]
+validate = ["duckdb>=2.0"]
 # Runs generated notebooks in tests (Python 3.11+, needs Java).
 spark = ["pyspark>=4.1", "delta-spark>=4.4"]
 
