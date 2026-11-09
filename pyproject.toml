@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Understand, plan and validate legacy ETL migrations (SAP Data Services first)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = { text = "BUSL-1.1" }
+authors = [{ name = "Kishore Tenneti" }]
 dependencies = ["pydantic>=2.5", "networkx>=3.2"]
 
 [project.optional-dependencies]

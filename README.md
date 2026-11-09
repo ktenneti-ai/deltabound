@@ -78,4 +78,10 @@ tests/
 
 ## License
 
-Apache-2.0
+Created by **Kishore Tenneti**. Copyright (c) 2026 Kishore Tenneti.
+
+DeltaBound is licensed under the [Business Source License 1.1](LICENSE):
+free for development, testing and evaluation; **production use requires a
+commercial license (USD 25,000 per year)**, see [COMMERCIAL.md](COMMERCIAL.md).
+Each version converts to Apache-2.0 on its Change Date (four years after release
+at the latest). The BSL is source-available, not an OSI-approved open-source license.
