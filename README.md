@@ -97,6 +97,59 @@ npm test           # Vitest; Python-side tests run with pytest
   cached afterwards. Startup takes about 2 seconds, and loading the 60-dataflow
   sample takes about 0.3 seconds.
 
+## Conversion to Databricks
+
+`deltabound convert` turns a job into a Databricks Asset Bundle:
+- one notebook per dataflow, written in PySpark with Spark SQL
+- the job definition with its control flow
+- a setup notebook that creates the target tables
+- a conversion report
+
+```bash
+deltabound convert samples/bods --job JOB_SALES_DAILY --out build/JOB_SALES_DAILY
+deltabound convert samples/bods --all --out build/        # one bundle per job
+cd build/JOB_SALES_DAILY && databricks bundle deploy      # after reviewing conversion_report.md
+```
+
+- **Rules:**
+  - Query: joins, WHERE, GROUP BY, ORDER BY into file targets, typed output
+    columns.
+  - Lookups (`lookup_ext`, `lookup`, the Lookup transform): deduplicated left
+    joins with the legacy default value.
+  - Case: first-match branches; NULL conditions count as false.
+  - Merge: union by column name.
+  - Table Comparison, History Preserving and Key Generation chains: Delta
+    `MERGE` for SCD type 1 and 2, with an identity surrogate key.
+  - Sources and targets.
+  - BODS expressions are translated function by function, and variables become
+    Spark session variables.
+- **No guessing:** anything without a rule is marked
+  `TODO(deltabound)`. Notebook steps raise `NotImplementedError`, so a
+  half-converted pipeline fails loudly.
+- **Control flow:**
+  - if/else becomes `condition_task`s.
+  - Retry loops become `max_retries`; other loops are flagged as TODOs.
+  - Catch blocks run with `run_if: AT_LEAST_ONE_FAILED`.
+  - Scripts become notebooks that pass variables on as task values.
+- **Settings:** optional, in `deltabound.toml`:
+
+  ```toml
+  [convert]
+  compute = "serverless"              # or "job_cluster"
+  [convert.datastores]                # legacy datastore(.owner) -> Unity Catalog catalog.schema
+  "DS_ERP.SAPSR3" = "bronze.sap_erp"
+  "DS_DWH" = "main.dwh"
+  [convert.scd]                       # used when the export does not name SCD2 columns
+  current_flag = "CURRENT_FLAG"
+  current_value = "Y"
+  ```
+
+On the sample estate, 205 of 226 transforms convert (91%). The rest are file
+I/O, Validation, Map Operation, unmodeled transforms and one lookup whose table
+is only known at run time. The tests run the generated notebooks on local Spark
+with Delta: `pip install -e ".[spark]"`, Java 17+, then
+`pytest -m spark`. `pytest -m "not spark"` skips them.
+
 ## Job explanations (AI)
 
 `deltabound explain` writes a plain-English summary of a job (purpose, inputs,
@@ -134,7 +187,7 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain samples/bods --job JOB_SALES_DAI
   For client estates, confirm that is allowed first, and use `--dry-run` to
   review exactly what would be sent.
 
-## What the IR captures (v0.2.0)
+## What the IR captures (v0.2.1)
 
 - Jobs, workflows and dataflows; calls with their condition and the enclosing
   control construct (`branch`, `loop`, `error_handler`); variables, parameters, scripts.
@@ -145,7 +198,10 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain samples/bods --job JOB_SALES_DAI
 - Column lineage follows lookups and passes through Table Comparison, History
   Preserving, Key Generation, Case, Merge, Validation and Map Operation; it
   stops at opaque transforms.
-- IR 0.1.0 JSON files still load (all new fields have defaults).
+- Lookup defaults, return policy and cache hint; Table Comparison key and compare
+  columns; SCD2 column settings; generated key columns; where each script sits
+  among the calls (0.2.1).
+- IR 0.1.0 and 0.2.0 JSON files still load (all new fields have defaults).
 
 ## Layout
 
@@ -157,6 +213,7 @@ deltabound/
   report.py         # markdown estate report
   explain/          # AI job explanations with citations (Anthropic), cached
   bridge.py         # entry points for the web viewer (bytes in, JSON out)
+  convert/          # IR -> Databricks notebooks + Asset Bundle + conversion report
 viewer/             # static web viewer: Vite + React + React Flow + Pyodide
   cli.py            # command line
 samples/bods/       # SYNTHETIC estate, fictional Fernhill Retail: 15 jobs, 30 workflows, 60 dataflows
@@ -180,10 +237,10 @@ tests/
 ## Next steps
 
 1. Validate the parser against a real (permitted) BODS export; expand transform coverage.
-2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity.
-3. Rule-based conversion to PySpark and Databricks Asset Bundles (docs/design/convert.md).
-4. Step-level data validation and sign-off report (docs/design/validate.md).
-5. SSIS parser (deferred; docs/design/ssis.md).
+2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity;
+   conversion rules for file sources/targets, Validation and Map Operation.
+3. Step-level data validation and sign-off report (docs/design/validate.md).
+4. SSIS parser (deferred; docs/design/ssis.md).
 
 ## License
 

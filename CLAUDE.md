@@ -31,7 +31,14 @@ Python package and CLI name: `deltabound`.
   Pyodide runtime into `public/` (gitignored); everything is self-hosted, no CDN at run time.
   When the IR changes: `cd viewer && npm run gen:types`, and regenerate the fixtures with
   `.venv/bin/python viewer/scripts/gen_fixtures.py` (pytest fails until both are current).
-- Next: `convert/`, `validate/`. SSIS is deferred. Design docs are in `docs/design/`.
+- `deltabound/convert/` — IR -> Databricks notebooks (PySpark + Spark SQL over temp views)
+  and an Asset Bundle. Reads the IR only. Rule for every transform kind it converts; anything
+  else becomes a TODO cell that raises NotImplementedError (never a pass-through guess).
+  Decided 2026-11-09: Delta identity surrogate keys, SCD2 defaults VALID_FROM/VALID_TO/
+  CURRENT_FLAG='Y'/9999-12-31 when the export names none, serverless compute.
+  Golden output in tests/golden/convert (refresh: DELTABOUND_UPDATE_GOLDEN=1, review the diff).
+  tests/test_convert_spark.py runs generated notebooks on local Spark (marker `spark`).
+- Next: `validate/`. SSIS is deferred. Design docs are in `docs/design/`.
 
 ## Rules
 - Unknown or unsupported elements become `opaque` transforms and are listed in
@@ -48,13 +55,16 @@ Python package and CLI name: `deltabound`.
 - Keep the README quick start working after every change.
 
 ## Current state (updated 2026-11-09)
-- IR_VERSION 0.2.0. `samples/ir/estate_v0.1.0.json` must keep loading; when bumping the IR
-  again, add an export from the previous version there.
+- IR_VERSION 0.2.1. `samples/ir/estate_v0.1.0.json` and `estate_v0.2.0.json` must keep loading;
+  when bumping the IR again, add an export from the previous version there.
+- Transform names are unique within a dataflow (the parser renames a clashing target to
+  `<TABLE>_TARGET`); code may rely on that.
 - `samples/bods/` is the multi-file Fernhill Retail estate (15 jobs, 30 workflows, 60
   dataflows). `tests/test_bods_estate.py` asserts its exact counts, dead code and unparsed
   items, so update tests when changing the sample. `samples/bods_mini/` is the original
   small sample.
 - Environment: Python 3.12 from Homebrew in `.venv` (system python3 is 3.9, too old).
+  Spark tests use Homebrew openjdk (found automatically; Java 25 works with Spark 4.2).
 - License: Business Source License 1.1, Licensor Kishore Tenneti, Change Date 2030-11-09,
   Change License Apache-2.0. Production use needs the USD 25K/yr commercial license
   (COMMERCIAL.md). Keep the BSL text unmodified apart from the Parameters block.

@@ -1,6 +1,22 @@
 # Design: rule-based IR → PySpark conversion (`deltabound/convert/`)
 
-Status: DESIGN DOC, awaiting review. No code yet. Author: Claude for Kishore Tenneti, 2026-11-09.
+Status: IMPLEMENTED 2026-11-09 (milestones 1-5). Decisions and departures from this doc:
+- Decided: Delta identity surrogate keys; SCD2 defaults VALID_FROM / VALID_TO / CURRENT_FLAG='Y'
+  / 9999-12-31 when the export names none (export settings win); serverless compute; pyspark +
+  delta-spark as an optional `spark` extra for behaviour tests.
+- Each transform becomes a Spark SQL statement over temporary views (inside the PySpark
+  notebook) instead of chained `F.expr()` calls: joins, lookups-as-joins, GROUP BY and
+  first-match Case read naturally and stay close to the legacy logic. Legacy variables become
+  Spark session variables (`system.session.NAME`), set from job parameters / task values.
+- IR 0.2.1 added what the rules needed: lookup defaults/policy/cache, Table Comparison keys and
+  compare columns, SCD2 column settings, generated key column, and script positions
+  (`EtlObject.script_steps`), so scripts land inside the right try/catch, loop or branch.
+- A setup notebook creates target schemas and tables (identity key, SCD columns) when the
+  types are known from the IR; otherwise the report says to create the table by hand.
+- Known approximation: the IR does not mark which calls form a *try* block, so a catch runs
+  when any earlier task of its workflow fails. Flagged in every report.
+- Not yet verified: `databricks bundle validate`/deploy against a workspace (no workspace
+  access while building). Local Spark behaviour tests cover the notebooks.
 
 ## 1. Goal and scope
 

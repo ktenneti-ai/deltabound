@@ -70,6 +70,31 @@ def cmd_report(a) -> None:
     print(f"Wrote {a.out}")
 
 
+def cmd_convert(a) -> None:
+    from .convert import ConvertError, convert_job, load_convert_config
+
+    e = _load(a.paths)
+    jobs = sorted(j.name for j in e.by_kind(ObjectKind.JOB)) if a.all else [a.job]
+    unknown = [j for j in jobs if j not in e.objects or e.objects[j].kind != ObjectKind.JOB]
+    if unknown:
+        sys.exit(f"Not a job in this export: {', '.join(unknown)}")
+    try:
+        cfg = load_convert_config(Path(a.config) if a.config else None)
+    except ConvertError as err:
+        sys.exit(f"convert: {err}")
+    out = Path(a.out)
+    for j in jobs:
+        r = convert_job(e, j, cfg)
+        base = out / j if a.all else out
+        for rel, text in r.files.items():
+            path = base / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        transforms = [t for d in r.dataflows for t in d.transforms]
+        done = sum(1 for t in transforms if t.status == "converted")
+        print(f"{j}: {done}/{len(transforms)} transforms converted, {r.todo_count} blocking TODO(s) -> {base}/conversion_report.md")
+
+
 def schema_json() -> str:
     """JSON Schema of the IR as serialised (model_dump always writes every field, defaults included)."""
     from .ir import Estate
@@ -145,6 +170,13 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--refresh", action="store_true", help="ignore the cache")
     s.add_argument("--dry-run", action="store_true", help="write the prompts to disk, send nothing")
     s.add_argument("--bundle", help="write all explanations to one JSON file (for the viewer)")
+    s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
+
+    s = add("convert", cmd_convert, "convert a job to Databricks notebooks + Asset Bundle")
+    which = s.add_mutually_exclusive_group(required=True)
+    which.add_argument("--job")
+    which.add_argument("--all", action="store_true", help="convert every job (one bundle per job)")
+    s.add_argument("--out", required=True, help="output folder")
     s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
 
     sc = sub.add_parser("schema", help="write the IR JSON Schema (used by the viewer's TypeScript types)")

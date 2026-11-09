@@ -1,0 +1,191 @@
+{
+  "job": "JOB_CUSTOMER_SYNC",
+  "todo_count": 1,
+  "dataflows": [
+    {
+      "dataflow": "DF_STG_CUSTOMER",
+      "notebook": "notebooks/dataflows/DF_STG_CUSTOMER.py",
+      "transforms": [
+        {
+          "cite": "df:DF_STG_CUSTOMER/KNA1",
+          "kind": "table_source",
+          "rule": "table_source",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_ERP is not mapped in [convert.datastores]; using ds_erp.sapsr3.kna1"
+          ]
+        },
+        {
+          "cite": "df:DF_STG_CUSTOMER/Q_CUSTOMER",
+          "kind": "query",
+          "rule": "query",
+          "status": "converted",
+          "todos": [],
+          "notes": []
+        },
+        {
+          "cite": "df:DF_STG_CUSTOMER/STG_CUSTOMER",
+          "kind": "table_target",
+          "rule": "table_target",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_DWH is not mapped in [convert.datastores]; using ds_dwh.stg.stg_customer"
+          ]
+        }
+      ],
+      "variables": [],
+      "writes": [
+        "ds_dwh.stg.stg_customer"
+      ]
+    },
+    {
+      "dataflow": "DF_DIM_CUSTOMER",
+      "notebook": "notebooks/dataflows/DF_DIM_CUSTOMER.py",
+      "transforms": [
+        {
+          "cite": "df:DF_DIM_CUSTOMER/STG_CUSTOMER",
+          "kind": "table_source",
+          "rule": "table_source",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_DWH is not mapped in [convert.datastores]; using ds_dwh.stg.stg_customer"
+          ]
+        },
+        {
+          "cite": "df:DF_DIM_CUSTOMER/Q_CUST",
+          "kind": "query",
+          "rule": "query",
+          "status": "converted",
+          "todos": [],
+          "notes": []
+        },
+        {
+          "cite": "df:DF_DIM_CUSTOMER/TC_CUST",
+          "kind": "table_comparison",
+          "rule": "scd_merge",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "converted as part of the merge into DIM_CUSTOMER"
+          ]
+        },
+        {
+          "cite": "df:DF_DIM_CUSTOMER/HP_CUST",
+          "kind": "history_preserving",
+          "rule": "scd_merge",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "converted as part of the merge into DIM_CUSTOMER"
+          ]
+        },
+        {
+          "cite": "df:DF_DIM_CUSTOMER/KG_CUST",
+          "kind": "key_generation",
+          "rule": "scd_merge",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "converted as part of the merge into DIM_CUSTOMER"
+          ]
+        },
+        {
+          "cite": "df:DF_DIM_CUSTOMER/DIM_CUSTOMER",
+          "kind": "table_target",
+          "rule": "scd2_merge",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_DWH is not mapped in [convert.datastores]; using ds_dwh.mart.dim_customer",
+            "KG_CUST: key CUSTOMER_KEY becomes a Delta identity column (values differ from legacy keys)"
+          ]
+        }
+      ],
+      "variables": [],
+      "writes": [
+        "ds_dwh.mart.dim_customer"
+      ]
+    },
+    {
+      "dataflow": "DF_CUSTOMER_ADDRESS_CLEANSE",
+      "notebook": "notebooks/dataflows/DF_CUSTOMER_ADDRESS_CLEANSE.py",
+      "transforms": [
+        {
+          "cite": "df:DF_CUSTOMER_ADDRESS_CLEANSE/STG_CUSTOMER",
+          "kind": "table_source",
+          "rule": "table_source",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_DWH is not mapped in [convert.datastores]; using ds_dwh.stg.stg_customer"
+          ]
+        },
+        {
+          "cite": "df:DF_CUSTOMER_ADDRESS_CLEANSE/Q_ADDR",
+          "kind": "query",
+          "rule": "query",
+          "status": "converted",
+          "todos": [],
+          "notes": []
+        },
+        {
+          "cite": "df:DF_CUSTOMER_ADDRESS_CLEANSE/VAL_ADDRESS",
+          "kind": "validation",
+          "rule": null,
+          "status": "todo",
+          "todos": [
+            "no conversion rule for validation"
+          ],
+          "notes": []
+        },
+        {
+          "cite": "df:DF_CUSTOMER_ADDRESS_CLEANSE/CUSTOMER_ADDRESS",
+          "kind": "table_target",
+          "rule": "table_target",
+          "status": "converted",
+          "todos": [],
+          "notes": [
+            "datastore DS_DWH is not mapped in [convert.datastores]; using ds_dwh.mart.customer_address"
+          ]
+        }
+      ],
+      "variables": [],
+      "writes": [
+        "ds_dwh.mart.customer_address"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "task_key": "setup_tables",
+      "kind": "setup",
+      "source": "job:JOB_CUSTOMER_SYNC",
+      "todos": [],
+      "notes": []
+    },
+    {
+      "task_key": "WF_CUSTOMER_SYNC__WF_DIM_CUSTOMER_SCD__DF_STG_CUSTOMER",
+      "kind": "dataflow",
+      "source": "call:WF_DIM_CUSTOMER_SCD#1",
+      "todos": [],
+      "notes": []
+    },
+    {
+      "task_key": "WF_CUSTOMER_SYNC__WF_DIM_CUSTOMER_SCD__DF_DIM_CUSTOMER",
+      "kind": "dataflow",
+      "source": "call:WF_DIM_CUSTOMER_SCD#2",
+      "todos": [],
+      "notes": []
+    },
+    {
+      "task_key": "WF_CUSTOMER_SYNC__DF_CUSTOMER_ADDRESS_CLEANSE",
+      "kind": "dataflow",
+      "source": "call:WF_CUSTOMER_SYNC#2",
+      "todos": [],
+      "notes": []
+    }
+  ]
+}
