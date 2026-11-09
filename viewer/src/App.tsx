@@ -52,6 +52,9 @@ export function App() {
         }
         return next;
       });
+      // A new estate replaces the old one: leave a job/dataflow page it no longer has.
+      const current = parseRoute(location.hash);
+      if (next.ok && "name" in current && !next.estate?.objects[current.name]) location.hash = "#/";
       if (!next.ok && !next.explanations) {
         setError(
           estateLoaded.current
