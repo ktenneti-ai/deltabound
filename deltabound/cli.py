@@ -211,6 +211,7 @@ def cmd_schema(a) -> None:
 
 def cmd_explain(a) -> None:
     from .explain import Explainer, ExplainError, explainable_jobs, load_config
+    from .explain.governance import approve
     from .explain.render import render_text
 
     e = _load(a.paths)
@@ -225,6 +226,36 @@ def cmd_explain(a) -> None:
             for j in jobs:
                 ex.job(j, a.refresh)
             print(f"Dry run: prompts written to {cfg.cache_dir}/prompts/ (nothing was sent)")
+            return
+        plan = ex.plan(jobs, a.refresh)
+        if plan.calls and cfg.provider != "fake":
+            print(plan.describe())
+            problems = plan.violations(cfg.limits)
+            if problems:
+                ex.audit.write("refused", token=plan.token, reason="over limits", problems=problems)
+                sys.exit("explain: refused, the plan is over the limits in [explain.limits]: " + "; ".join(problems)
+                         + ". Explain fewer jobs, lower max_tokens, or have the owner raise the limits.")
+            if a.plan:
+                print(f"\nNothing was sent. To run exactly this plan: --approve {plan.token}")
+                return
+            if a.approve:
+                if a.approve != plan.token:
+                    ex.audit.write("refused", token=plan.token, reason="approval token mismatch", given=a.approve)
+                    sys.exit(f"explain: --approve {a.approve} does not match this plan ({plan.token}); the plan "
+                             "changed since it was approved. Review it again with --plan.")
+            elif sys.stdin.isatty():
+                answer = input("Type APPROVE to send these requests (anything else cancels): ").strip()
+                if answer != "APPROVE":
+                    ex.audit.write("refused", token=plan.token, reason="not approved at the prompt")
+                    sys.exit("explain: cancelled, nothing was sent.")
+            else:
+                ex.audit.write("refused", token=plan.token, reason="no approval (non-interactive)")
+                sys.exit("explain: needs human approval. Review with --plan, then rerun with --approve "
+                         f"{plan.token}. Nothing was sent.")
+            ex.approval = approve(plan, a.approver)
+        elif a.plan:
+            print(f"Nothing to send: {plan.cached} answer(s) come from the cache." if not plan.calls
+                  else "The fake provider sends nothing outside this machine; no approval needed.")
             return
         bundle = ex.bundle(jobs, a.refresh)
     except ExplainError as err:
@@ -267,6 +298,9 @@ def main(argv: list[str] | None = None) -> None:
     which.add_argument("--all", action="store_true", help="explain every job")
     s.add_argument("--refresh", action="store_true", help="ignore the cache")
     s.add_argument("--dry-run", action="store_true", help="write the prompts to disk, send nothing")
+    s.add_argument("--plan", action="store_true", help="show what would be sent and its worst-case cost; send nothing")
+    s.add_argument("--approve", metavar="TOKEN", help="approve exactly the plan with this token (non-interactive)")
+    s.add_argument("--approver", help="name recorded in the audit log (default: your login name)")
     s.add_argument("--bundle", help="write all explanations to one JSON file (for the viewer)")
     s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
 

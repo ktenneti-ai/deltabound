@@ -41,7 +41,13 @@ effort = "high"
 max_tokens = 16000
 fallbacks = true
 redact_literals = false
-cache_dir = ".deltabound/explain"   # relative to this folder
+cache_dir = ".deltabound/explain"   # relative to this folder; audit.jsonl is written here too
+
+[explain.limits]                # hard caps per run; every run also needs a person's approval (docs/governance.md)
+max_calls = 100
+max_input_tokens = 1000000
+max_output_tokens = 2000000
+max_cost_usd = 25.0
 
 [validate]
 manifests = ["validation/JOB_SALES_DAILY/validation.toml"]

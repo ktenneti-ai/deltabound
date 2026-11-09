@@ -47,6 +47,9 @@ Python package and CLI name: `deltabound`.
 - SSIS is deferred. Design docs are in `docs/design/`.
 
 ## Rules
+- Outside API calls exist only in `explain/provider.py` and must go through `explain/governance.py`
+  (approved, priced plan; caps enforced per call; audit log). Never add another network client;
+  tests/test_governance.py fails if any module other than explain/provider.py imports one.
 - Unknown or unsupported elements become `opaque` transforms and are listed in
   `Estate.unparsed`. Never silently drop anything; coverage must stay measurable.
 - Demo sources live in `demo/<source>/` (deltabound.toml with all settings, README.md, exports/,

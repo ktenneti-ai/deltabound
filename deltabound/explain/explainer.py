@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from ..ir import Estate, ObjectKind
 from . import context as cx
 from . import prompts
-from .config import ExplainConfig
+from .config import ExplainConfig, ExplainError
+from .governance import Approval, AuditLog, GovernedProvider, Plan, PlannedCall, estimate_tokens
 from .model import Claim, DataflowNotes, ExplanationBundle, JobExplanation, RejectedClaim, RunInfo
 from .provider import Provider, get_provider
 
@@ -19,19 +20,62 @@ M = TypeVar("M", bound=BaseModel)
 
 class Explainer:
     def __init__(self, estate: Estate, cfg: ExplainConfig, provider: Optional[Provider] = None,
-                 dry_run: bool = False):
+                 dry_run: bool = False, approval: Optional[Approval] = None):
         self.estate = estate
         self.cfg = cfg
         self.dry_run = dry_run
         self._provider = provider
+        self._provider_ready = False
+        self.approval = approval
         self.cache = Path(cfg.cache_dir)
+        self.audit = AuditLog(self.cache / "audit.jsonl")
         self.stats = {"llm_calls": 0, "cache_hits": 0, "retries": 0}
 
     @property
     def provider(self) -> Provider:
-        if self._provider is None:  # created lazily: dry runs and cache hits need no credentials
-            self._provider = get_provider(self.cfg)
+        """The provider, wrapped in governance when it would send data to an outside API.
+
+        Applies to injected providers too: anything not marked external = False is governed.
+        """
+        if not self._provider_ready:  # created lazily: dry runs and cache hits need no credentials
+            inner = self._provider or get_provider(self.cfg)
+            if getattr(inner, "external", True) and not isinstance(inner, GovernedProvider):
+                if self.approval is None:
+                    self.audit.write("refused", reason="no approved plan", provider=inner.name)
+                    raise ExplainError("API calls need an approved plan: run `deltabound explain ... --plan`, "
+                                       "review it, then approve it (type APPROVE or pass --approve <token>).")
+                inner = GovernedProvider(inner, self.cfg, self.approval, self.audit)
+            self._provider = inner
+            self._provider_ready = True
         return self._provider
+
+    def plan(self, jobs: list[str], refresh: bool = False) -> Plan:
+        """Every request a run would send (cache hits excluded), priced at worst case. Sends nothing."""
+        p = Plan(jobs=jobs, provider=self.cfg.provider, model=self.cfg.model, max_tokens=self.cfg.max_tokens)
+        seen: set[str] = set()
+        for job in jobs:
+            job_ctx = cx.job_context(self.estate, job, self.cfg.redact_literals)
+            dataflows = cx.job_dataflows(self.estate, job)
+            df_ctxs = {d: cx.dataflow_context(self.estate, d, self.cfg.redact_literals) for d in dataflows}
+            for d, ctx in df_ctxs.items():
+                if d in seen:
+                    continue
+                seen.add(d)
+                cached = not refresh and self._load(self.cache / "dataflows" / f"{d}.json", DataflowNotes,
+                                                    self._hash(ctx), count=False)
+                if cached:
+                    p.cached += 1
+                else:
+                    p.calls.append(PlannedCall(purpose=f"dataflow {d}", input_tokens=estimate_tokens(
+                        prompts.DATAFLOW_SYSTEM + prompts.user_prompt(ctx))))
+            key = self._hash(job_ctx, [self._hash(c) for c in df_ctxs.values()])
+            if not refresh and self._load(self.cache / "jobs" / f"{job}.json", JobExplanation, key, count=False):
+                p.cached += 1
+                continue
+            notes_allowance = 700 * len(dataflows)  # dataflow notes are added to the job prompt
+            p.calls.append(PlannedCall(purpose=f"job {job}", input_tokens=estimate_tokens(
+                prompts.JOB_SYSTEM + prompts.user_prompt(job_ctx, [])) + notes_allowance))
+        return p.finalize(self.cfg, self.cfg.limits)
 
     # ---------- public ----------
 
@@ -46,7 +90,7 @@ class Explainer:
             self._write_prompt(f"dataflow-{name}", prompts.DATAFLOW_SYSTEM, user)
             return None
         claims, rejected, model = self._ask(prompts.DATAFLOW_SYSTEM, user, prompts.DATAFLOW_SCHEMA,
-                                             prompts.DATAFLOW_SECTIONS, cx.citation_ids(ctx))
+                                             prompts.DATAFLOW_SECTIONS, cx.citation_ids(ctx), f"dataflow {name}")
         notes = DataflowNotes(dataflow=name, **claims, rejected=rejected, run=self._run(model, key))
         self._save(path, notes)
         return notes
@@ -71,7 +115,7 @@ class Explainer:
                        "rules": [c.model_dump(include={"text", "citations"}) for c in n.rules]} for n in notes]
         valid = cx.citation_ids(job_ctx, *df_ctxs)
         claims, rejected, model = self._ask(prompts.JOB_SYSTEM, prompts.user_prompt(job_ctx, notes_json),
-                                             prompts.JOB_SCHEMA, prompts.JOB_SECTIONS, valid)
+                                             prompts.JOB_SCHEMA, prompts.JOB_SECTIONS, valid, f"job {name}")
         _add_missing_facts(claims, job_ctx.get("facts", []))
         result = JobExplanation(job=name, **claims, rejected=rejected, dataflows=dataflows,
                                 run=self._run(model, key))
@@ -94,8 +138,10 @@ class Explainer:
     # ---------- internals ----------
 
     def _ask(self, system: str, user: str, schema: dict, sections: tuple[str, ...],
-             valid: set[str]) -> tuple[dict[str, list[Claim]], list[RejectedClaim], str]:
+             valid: set[str], purpose: str = "request") -> tuple[dict[str, list[Claim]], list[RejectedClaim], str]:
         """Call the model; retry once if any claim cites ids outside the context."""
+        if hasattr(self.provider, "purpose"):
+            self.provider.purpose = purpose  # type: ignore[attr-defined]
         completion = self.provider.complete_json(system, user, schema)
         self.stats["llm_calls"] += 1
         claims, invalid = _split(completion.data, sections, valid)
@@ -121,7 +167,7 @@ class Explainer:
         return RunInfo(provider=self.cfg.provider, model=model, prompt_version=prompts.PROMPT_VERSION,
                        context_hash=key, created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
-    def _load(self, path: Path, cls: type[M], key: str) -> Optional[M]:
+    def _load(self, path: Path, cls: type[M], key: str, count: bool = True) -> Optional[M]:
         if not path.exists():
             return None
         try:
@@ -130,7 +176,8 @@ class Explainer:
             return None  # unreadable or old-format cache entry: recompute
         if obj.run.context_hash != key:  # type: ignore[attr-defined]
             return None
-        self.stats["cache_hits"] += 1
+        if count:
+            self.stats["cache_hits"] += 1
         return obj
 
     def _save(self, path: Path, obj: BaseModel) -> None:

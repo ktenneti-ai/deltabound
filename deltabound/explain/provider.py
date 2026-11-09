@@ -26,6 +26,7 @@ class Provider(Protocol):
 
 class AnthropicProvider:
     name = "anthropic"
+    external = True  # sends data to an outside API: only usable through an approved plan (governance.py)
 
     def __init__(self, cfg: ExplainConfig):
         try:
@@ -101,6 +102,7 @@ class FakeProvider:
     """
 
     name = "fake"
+    external = False  # never leaves the process
 
     def __init__(self, cfg: Optional[ExplainConfig] = None, responses: Optional[list[dict]] = None):
         self.responses = list(responses or [])

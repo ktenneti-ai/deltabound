@@ -228,6 +228,11 @@ DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DA
   ```
 
   `DELTABOUND_LLM_MODEL` and `DELTABOUND_LLM_PROVIDER` override the file.
+- **Governed API use:** no request is sent without a person approving a priced plan
+  (type `APPROVE`, or `--approve <token>` in automation). Hard caps in
+  `[explain.limits]` are enforced on every call, and every approval, call and refusal
+  is written to an audit log. `--plan` shows the plan and sends nothing. See
+  [docs/governance.md](docs/governance.md).
 - **Privacy:** explain sends ETL logic (table names, expressions) to Anthropic.
   For client estates, confirm that is allowed first, and use `--dry-run` to
   review exactly what would be sent.
