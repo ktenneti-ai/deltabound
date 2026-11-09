@@ -91,3 +91,157 @@ def test_missing_reference():
 def test_readme_lineage_example_still_works():
     ups = graph.trace_column(_estate(), "DF_STG_ORDERS_DELTA", "DS_DWH.STG.STG_ORDERS.NET_AMOUNT")
     assert "VBAK.NETWR" in ups
+
+
+# ---------- control flow (IR 0.2.0 CallStep.control) ----------
+
+def test_if_else_labels_and_control():
+    calls = {c.target: c for c in _estate().objects["WF_STAGE_SALES"].calls}
+    assert calls["DF_STG_ORDERS_FULL"].condition == "$G_FULL_LOAD = 'Y'"
+    assert calls["DF_STG_ORDERS_DELTA"].condition == "NOT ($G_FULL_LOAD = 'Y')"
+    assert calls["DF_STG_ORDERS_DELTA"].control == "branch"
+    assert calls["DF_STG_ORDER_ITEMS"].condition is None and calls["DF_STG_ORDER_ITEMS"].control is None
+
+
+def test_while_loop_calls():
+    calls = {c.target: c for c in _estate().objects["WF_POS_INTRADAY"].calls}
+    assert calls["DF_STG_POS_TRANSACTIONS"].control == "loop"
+    assert calls["DF_STG_POS_TRANSACTIONS"].condition == "while $L_STORE_IDX <= $L_STORE_COUNT"
+    assert calls["DF_FACT_POS_SALES"].control is None
+
+
+def test_try_block_is_unconditional_and_catch_is_error_handler():
+    calls = {c.target: c for c in _estate().objects["WF_SALES_DAILY_MAIN"].calls}
+    assert calls["WF_STAGE_SALES"].condition is None and calls["WF_STAGE_SALES"].control is None
+    assert calls["DF_CTL_JOB_ERROR"].control == "error_handler"
+    assert calls["DF_CTL_JOB_ERROR"].condition == "on error (ALL)"
+
+
+def test_try_catch_inside_loop_keeps_loop_condition():
+    calls = {c.target: c for c in _estate().objects["WF_LOAD_FX_RATES"].calls}
+    assert calls["DF_STG_FX_RATES"].control == "loop"
+    assert calls["DF_STG_FX_RATES"].condition == "while $L_RETRY < 3 AND $L_DONE = 'N'"
+
+
+def test_parameters_get_parameter_scope():
+    v = {v.name: v for v in _estate().objects["WF_ECOM_ORDERS"].variables}
+    assert v["$P_SOURCE_DIR"].scope == "parameter"
+
+
+def test_tree_shows_error_handler_condition():
+    lines = graph.tree_lines(_estate(), "JOB_SALES_DAILY")
+    assert "    dataflow: DF_CTL_JOB_ERROR   [if on error (ALL)]" in lines
+    assert not any("DITryCatch" in l for l in lines)
+
+
+# ---------- query details ----------
+
+def test_query_joins():
+    q = transform("DF_FACT_ECOM_SALES", "Q_ECOM")
+    assert [(j.left, j.right, j.join_type) for j in q.joins] == [
+        ("STG_ECOM_ORDERS", "STG_ECOM_ORDER_LINES", "inner"),
+        ("STG_ECOM_ORDERS", "STG_FX_RATES", "left_outer"),
+    ]
+    assert q.joins[0].condition == "STG_ECOM_ORDERS.WEB_ORDER_ID = STG_ECOM_ORDER_LINES.WEB_ORDER_ID"
+
+
+def test_group_by_and_order_by():
+    q = transform("DF_AGG_SALES_DAILY", "Q_AGG_DAY")
+    assert q.group_by == ["FACT_SALES.ORDER_DATE", "FACT_SALES.PRODUCT_KEY"]
+    assert [(s.expression, s.direction) for s in q.order_by] == [
+        ("FACT_SALES.ORDER_DATE", "asc"), ("sum(FACT_SALES.LINE_AMOUNT)", "desc"),
+    ]
+
+
+def test_case_branches():
+    case = transform("DF_FACT_POS_SALES", "CASE_CHANNEL")
+    assert [(b.name, b.condition, b.is_default) for b in case.branches] == [
+        ("CH_STORE", "Q_POS_IN.CHANNEL = 'STORE'", False),
+        ("CH_KIOSK", "Q_POS_IN.CHANNEL = 'KIOSK'", False),
+        ("CH_OTHER", None, True),
+    ]
+
+
+def test_merge_keeps_all_inputs():
+    assert transform("DF_FACT_POS_SALES", "MRG_CHANNELS").inputs == ["Q_STORE", "Q_KIOSK", "Q_OTHER"]
+    assert transform("DF_CALC_REORDER", "MRG_REORDER").inputs == ["Q_CRIT", "Q_LOW"]
+
+
+def test_tool_specific_attributes_go_to_options():
+    assert transform("DF_FACT_LOYALTY_POINTS", "LKP_MEMBER_KEY").options == {"cachePolicy": "PRE_LOAD_CACHE"}
+    tgt = next(t for t in _estate().objects["DF_STG_ORDERS_FULL"].transforms if t.kind == "table_target")
+    assert tgt.options["loadMode"] == "truncate"
+
+
+# ---------- lookups ----------
+
+def test_lookup_ext_call():
+    q = transform("DF_FACT_SALES", "Q_JOIN")
+    lk = next(l for l in q.lookups if l.output_column == "PRODUCT_KEY")
+    assert lk.function == "lookup_ext"
+    assert lk.table.qualified == "DS_DWH.MART.DIM_PRODUCT"
+    assert lk.return_columns == ["PRODUCT_KEY"]
+    assert lk.match_columns == [("PRODUCT_ID", "STG_ORDER_ITEMS.PRODUCT_ID")]
+    assert lk.raw.startswith("lookup_ext([DS_DWH.MART.DIM_PRODUCT")
+    col = next(c for c in q.columns if c.column == "PRODUCT_KEY")
+    assert col.source_columns == ["DS_DWH.MART.DIM_PRODUCT.PRODUCT_KEY", "STG_ORDER_ITEMS.PRODUCT_ID"]
+
+
+def test_lookup_ext_with_several_match_columns():
+    lk = transform("DF_FACT_MARGIN", "Q_MARGIN").lookups[0]
+    assert lk.match_columns == [("FROM_CCY", "PRODUCT_COST.CURRENCY"), ("TO_CCY", "'EUR'")]
+
+
+def test_old_style_lookup_call():
+    lk = transform("DF_FACT_STOCK_DAILY", "Q_STOCK").lookups[1]
+    assert lk.function == "lookup"
+    assert lk.table.qualified == "DS_DWH.MART.DIM_STORE"
+    assert lk.return_columns == ["STORE_KEY"]
+    assert lk.match_columns == [("STORE_CODE", "STG_STOCK.STORE_CODE")]
+
+
+def test_lookup_transform():
+    lk = transform("DF_FACT_LOYALTY_POINTS", "LKP_MEMBER_KEY").lookups
+    assert len(lk) == 1
+    assert lk[0].function == "lookup_transform"
+    assert lk[0].table.qualified == "DS_DWH.MART.DIM_LOYALTY_MEMBER"
+    assert lk[0].return_columns == ["MEMBER_KEY"]
+    assert lk[0].match_columns == [("MEMBER_ID", "Q_TXN.MEMBER_ID")]
+
+
+def test_unresolvable_lookup_is_kept_and_reported():
+    q = transform("DF_AGG_MARGIN_BY_CATEGORY", "Q_CAT")
+    lk = next(l for l in q.lookups if l.output_column == "MARGIN_USD")
+    assert lk.table is None and "$G_FX_TABLE" in lk.raw
+    assert any("Q_CAT.MARGIN_USD" in u and "cannot be resolved" in u for u in _estate().unparsed)
+
+
+def test_lookup_table_names_are_not_mistaken_for_columns():
+    sources = {s for o in _estate().objects.values() for t in o.transforms for c in t.columns for s in c.source_columns}
+    assert not sources & {"DS_DWH.MART", "MART.DIM_PRODUCT", "MART.DIM_STORE", "DS_DWH.STG", "STG.STG_FX_RATES"}
+
+
+# ---------- robustness ----------
+
+def test_duplicate_objects_are_reported_not_overwritten():
+    mini = Path(__file__).parent.parent / "samples" / "bods_mini" / "retail_demo.xml"
+    e = bods.parse_files([mini, mini])
+    assert len(e.by_kind(ObjectKind.JOB)) == 2
+    dupes = [u for u in e.unparsed if "duplicate" in u]
+    assert len(dupes) == 13
+    assert any("duplicate job JOB_SALES_DAILY" in u for u in dupes)
+
+
+def test_ir_0_1_0_json_still_loads():
+    old = Path(__file__).parent.parent / "samples" / "ir" / "estate_v0.1.0.json"
+    e = Estate.model_validate_json(old.read_text())
+    assert e.ir_version == "0.1.0"
+    assert e.objects["WF_STAGE_SALES"].calls[0].control is None
+    assert e.objects["DF_FACT_SALES"].transforms[0].joins == []
+    assert graph.unreachable(e) == ["DF_STG_RETURNS", "WF_OLD_RETURNS_2019"]
+
+
+def test_export_round_trip():
+    e = _estate()
+    again = Estate.model_validate_json(e.model_dump_json())
+    assert again == e

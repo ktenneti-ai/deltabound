@@ -1,0 +1,711 @@
+{
+  "ir_version": "0.1.0",
+  "source_tool": "sap_data_services",
+  "source_version": "14.3.x-synthetic",
+  "objects": {
+    "JOB_SALES_DAILY": {
+      "name": "JOB_SALES_DAILY",
+      "kind": "job",
+      "description": "Daily load of orders into the sales mart",
+      "variables": [
+        {
+          "name": "$G_LOAD_DATE",
+          "scope": "global",
+          "data_type": "date",
+          "default": null
+        },
+        {
+          "name": "$G_FULL_LOAD",
+          "scope": "global",
+          "data_type": "varchar(1)",
+          "default": "N"
+        }
+      ],
+      "calls": [
+        {
+          "target": "WF_STAGE_SALES",
+          "target_kind": "workflow",
+          "condition": null,
+          "order": 1
+        },
+        {
+          "target": "WF_LOAD_MART",
+          "target_kind": "workflow",
+          "condition": null,
+          "order": 2
+        }
+      ],
+      "transforms": [],
+      "scripts": [
+        "$G_LOAD_DATE = sysdate();"
+      ]
+    },
+    "JOB_CUSTOMER_SYNC": {
+      "name": "JOB_CUSTOMER_SYNC",
+      "kind": "job",
+      "description": "Nightly customer master sync",
+      "variables": [],
+      "calls": [
+        {
+          "target": "DF_DIM_CUSTOMER",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 1
+        }
+      ],
+      "transforms": [],
+      "scripts": []
+    },
+    "WF_STAGE_SALES": {
+      "name": "WF_STAGE_SALES",
+      "kind": "workflow",
+      "description": null,
+      "variables": [],
+      "calls": [
+        {
+          "target": "DF_STG_ORDERS_FULL",
+          "target_kind": "dataflow",
+          "condition": "$G_FULL_LOAD = 'Y'",
+          "order": 1
+        },
+        {
+          "target": "DF_STG_ORDERS_DELTA",
+          "target_kind": "dataflow",
+          "condition": "NOT ($G_FULL_LOAD = 'Y')",
+          "order": 2
+        },
+        {
+          "target": "DF_STG_ORDER_ITEMS",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 3
+        }
+      ],
+      "transforms": [],
+      "scripts": []
+    },
+    "WF_LOAD_MART": {
+      "name": "WF_LOAD_MART",
+      "kind": "workflow",
+      "description": null,
+      "variables": [],
+      "calls": [
+        {
+          "target": "WF_DIMENSIONS",
+          "target_kind": "workflow",
+          "condition": null,
+          "order": 1
+        },
+        {
+          "target": "DF_FACT_SALES",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 2
+        }
+      ],
+      "transforms": [],
+      "scripts": []
+    },
+    "WF_DIMENSIONS": {
+      "name": "WF_DIMENSIONS",
+      "kind": "workflow",
+      "description": null,
+      "variables": [],
+      "calls": [
+        {
+          "target": "DF_DIM_CUSTOMER",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 1
+        },
+        {
+          "target": "DF_DIM_PRODUCT",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 2
+        }
+      ],
+      "transforms": [],
+      "scripts": []
+    },
+    "WF_OLD_RETURNS_2019": {
+      "name": "WF_OLD_RETURNS_2019",
+      "kind": "workflow",
+      "description": null,
+      "variables": [],
+      "calls": [
+        {
+          "target": "DF_STG_RETURNS",
+          "target_kind": "dataflow",
+          "condition": null,
+          "order": 1
+        }
+      ],
+      "transforms": [],
+      "scripts": []
+    },
+    "DF_STG_ORDERS_DELTA": {
+      "name": "DF_STG_ORDERS_DELTA",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "VBAK",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "VBAK"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_ORDERS",
+          "kind": "query",
+          "inputs": [
+            "VBAK"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "ORDER_ID",
+              "data_type": "varchar(10)",
+              "expression": "VBAK.VBELN",
+              "source_columns": [
+                "VBAK.VBELN"
+              ]
+            },
+            {
+              "column": "ORDER_DATE",
+              "data_type": "date",
+              "expression": "to_date(VBAK.ERDAT, 'YYYYMMDD')",
+              "source_columns": [
+                "VBAK.ERDAT"
+              ]
+            },
+            {
+              "column": "CUSTOMER_ID",
+              "data_type": "varchar(10)",
+              "expression": "VBAK.KUNNR",
+              "source_columns": [
+                "VBAK.KUNNR"
+              ]
+            },
+            {
+              "column": "NET_AMOUNT",
+              "data_type": "decimal(15,2)",
+              "expression": "round(VBAK.NETWR, 2)",
+              "source_columns": [
+                "VBAK.NETWR"
+              ]
+            }
+          ],
+          "where": "VBAK.ERDAT >= to_char($G_LOAD_DATE - 1, 'YYYYMMDD')",
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "STG_ORDERS",
+          "kind": "table_target",
+          "inputs": [
+            "Q_ORDERS"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_ORDERS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_STG_ORDERS_FULL": {
+      "name": "DF_STG_ORDERS_FULL",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "VBAK",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "VBAK"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_ORDERS_ALL",
+          "kind": "query",
+          "inputs": [
+            "VBAK"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "ORDER_ID",
+              "data_type": "varchar(10)",
+              "expression": "VBAK.VBELN",
+              "source_columns": [
+                "VBAK.VBELN"
+              ]
+            },
+            {
+              "column": "NET_AMOUNT",
+              "data_type": "decimal(15,2)",
+              "expression": "VBAK.NETWR",
+              "source_columns": [
+                "VBAK.NETWR"
+              ]
+            }
+          ],
+          "where": null,
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "STG_ORDERS",
+          "kind": "table_target",
+          "inputs": [
+            "Q_ORDERS_ALL"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_ORDERS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_STG_ORDER_ITEMS": {
+      "name": "DF_STG_ORDER_ITEMS",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "VBAP",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "VBAP"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_ITEMS",
+          "kind": "query",
+          "inputs": [
+            "VBAP"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "ORDER_ID",
+              "data_type": "varchar(10)",
+              "expression": "VBAP.VBELN",
+              "source_columns": [
+                "VBAP.VBELN"
+              ]
+            },
+            {
+              "column": "LINE_NO",
+              "data_type": "int",
+              "expression": "VBAP.POSNR",
+              "source_columns": [
+                "VBAP.POSNR"
+              ]
+            },
+            {
+              "column": "PRODUCT_ID",
+              "data_type": "varchar(18)",
+              "expression": "VBAP.MATNR",
+              "source_columns": [
+                "VBAP.MATNR"
+              ]
+            },
+            {
+              "column": "QTY",
+              "data_type": "decimal(13,3)",
+              "expression": "VBAP.KWMENG",
+              "source_columns": [
+                "VBAP.KWMENG"
+              ]
+            }
+          ],
+          "where": null,
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "STG_ORDER_ITEMS",
+          "kind": "table_target",
+          "inputs": [
+            "Q_ITEMS"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_ORDER_ITEMS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_DIM_CUSTOMER": {
+      "name": "DF_DIM_CUSTOMER",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "KNA1",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "KNA1"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_CUST",
+          "kind": "query",
+          "inputs": [
+            "KNA1"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "CUSTOMER_ID",
+              "data_type": "varchar(10)",
+              "expression": "KNA1.KUNNR",
+              "source_columns": [
+                "KNA1.KUNNR"
+              ]
+            },
+            {
+              "column": "CUSTOMER_NAME",
+              "data_type": "varchar(80)",
+              "expression": "upper(KNA1.NAME1)",
+              "source_columns": [
+                "KNA1.NAME1"
+              ]
+            },
+            {
+              "column": "COUNTRY",
+              "data_type": "varchar(3)",
+              "expression": "KNA1.LAND1",
+              "source_columns": [
+                "KNA1.LAND1"
+              ]
+            }
+          ],
+          "where": null,
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "TC_CUST",
+          "kind": "table_comparison",
+          "inputs": [
+            "Q_CUST"
+          ],
+          "table": null,
+          "columns": [],
+          "where": null,
+          "raw_tag": "DITableComparison"
+        },
+        {
+          "name": "HP_CUST",
+          "kind": "history_preserving",
+          "inputs": [
+            "TC_CUST"
+          ],
+          "table": null,
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIHistoryPreserving"
+        },
+        {
+          "name": "KG_CUST",
+          "kind": "key_generation",
+          "inputs": [
+            "HP_CUST"
+          ],
+          "table": null,
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIKeyGeneration"
+        },
+        {
+          "name": "DIM_CUSTOMER",
+          "kind": "table_target",
+          "inputs": [
+            "KG_CUST"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "MART",
+            "table": "DIM_CUSTOMER"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_DIM_PRODUCT": {
+      "name": "DF_DIM_PRODUCT",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "MARA",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "MARA"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_PROD",
+          "kind": "query",
+          "inputs": [
+            "MARA"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "PRODUCT_ID",
+              "data_type": "varchar(18)",
+              "expression": "MARA.MATNR",
+              "source_columns": [
+                "MARA.MATNR"
+              ]
+            },
+            {
+              "column": "PRODUCT_GROUP",
+              "data_type": "varchar(9)",
+              "expression": "MARA.MATKL",
+              "source_columns": [
+                "MARA.MATKL"
+              ]
+            }
+          ],
+          "where": null,
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "DIM_PRODUCT",
+          "kind": "table_target",
+          "inputs": [
+            "Q_PROD"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "MART",
+            "table": "DIM_PRODUCT"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_FACT_SALES": {
+      "name": "DF_FACT_SALES",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "STG_ORDERS",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_ORDERS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "STG_ORDER_ITEMS",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_ORDER_ITEMS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "Q_JOIN",
+          "kind": "query",
+          "inputs": [
+            "STG_ORDERS",
+            "STG_ORDER_ITEMS"
+          ],
+          "table": null,
+          "columns": [
+            {
+              "column": "ORDER_ID",
+              "data_type": "varchar(10)",
+              "expression": "STG_ORDERS.ORDER_ID",
+              "source_columns": [
+                "STG_ORDERS.ORDER_ID"
+              ]
+            },
+            {
+              "column": "LINE_NO",
+              "data_type": "int",
+              "expression": "STG_ORDER_ITEMS.LINE_NO",
+              "source_columns": [
+                "STG_ORDER_ITEMS.LINE_NO"
+              ]
+            },
+            {
+              "column": "CUSTOMER_ID",
+              "data_type": "varchar(10)",
+              "expression": "STG_ORDERS.CUSTOMER_ID",
+              "source_columns": [
+                "STG_ORDERS.CUSTOMER_ID"
+              ]
+            },
+            {
+              "column": "LINE_AMOUNT",
+              "data_type": "decimal(15,2)",
+              "expression": "STG_ORDERS.NET_AMOUNT * STG_ORDER_ITEMS.QTY",
+              "source_columns": [
+                "STG_ORDERS.NET_AMOUNT",
+                "STG_ORDER_ITEMS.QTY"
+              ]
+            }
+          ],
+          "where": "STG_ORDERS.ORDER_ID = STG_ORDER_ITEMS.ORDER_ID",
+          "raw_tag": "DIQuery"
+        },
+        {
+          "name": "LKP_CUSTOMER_KEY",
+          "kind": "lookup",
+          "inputs": [
+            "Q_JOIN"
+          ],
+          "table": null,
+          "columns": [],
+          "where": null,
+          "raw_tag": "DILookup"
+        },
+        {
+          "name": "PY_FX_CONVERT",
+          "kind": "opaque",
+          "inputs": [
+            "LKP_CUSTOMER_KEY"
+          ],
+          "table": null,
+          "columns": [],
+          "where": null,
+          "raw_tag": "DICustomPythonTransform"
+        },
+        {
+          "name": "FACT_SALES",
+          "kind": "table_target",
+          "inputs": [
+            "Q_JOIN"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "MART",
+            "table": "FACT_SALES"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    },
+    "DF_STG_RETURNS": {
+      "name": "DF_STG_RETURNS",
+      "kind": "dataflow",
+      "description": null,
+      "variables": [],
+      "calls": [],
+      "transforms": [
+        {
+          "name": "RETURNS_Z",
+          "kind": "table_source",
+          "inputs": [],
+          "table": {
+            "datastore": "DS_ERP",
+            "owner": "SAPSR3",
+            "table": "RETURNS_Z"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableSource"
+        },
+        {
+          "name": "STG_RETURNS",
+          "kind": "table_target",
+          "inputs": [
+            "RETURNS_Z"
+          ],
+          "table": {
+            "datastore": "DS_DWH",
+            "owner": "STG",
+            "table": "STG_RETURNS"
+          },
+          "columns": [],
+          "where": null,
+          "raw_tag": "DIDatabaseTableTarget"
+        }
+      ],
+      "scripts": []
+    }
+  },
+  "unparsed": [
+    "DF_FACT_SALES: transform <DICustomPythonTransform>"
+  ]
+}

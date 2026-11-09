@@ -11,7 +11,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-IR_VERSION = "0.1.0"
+# 0.2.0: adds Transform.joins/group_by/order_by/branches/lookups/options and
+# CallStep.control. All new fields have defaults, so 0.1.0 JSON still loads.
+IR_VERSION = "0.2.0"
 
 
 class ObjectKind(str, Enum):
@@ -32,7 +34,9 @@ class CallStep(BaseModel):
 
     target: str
     target_kind: Optional[ObjectKind] = None
-    condition: Optional[str] = None  # set when the call sits inside an if/while
+    condition: Optional[str] = None  # set when the call sits inside an if/while/catch
+    # Innermost enclosing control construct: None | "branch" | "loop" | "error_handler"
+    control: Optional[str] = None
     order: int = 0
 
 
@@ -56,6 +60,37 @@ class ColumnMapping(BaseModel):
     source_columns: list[str] = Field(default_factory=list)  # "INPUT.COL"
 
 
+class Join(BaseModel):
+    left: str  # input name
+    right: str
+    join_type: str = "inner"  # inner | left_outer | right_outer | full_outer | cross
+    condition: Optional[str] = None
+
+
+class SortKey(BaseModel):
+    expression: str
+    direction: str = "asc"  # asc | desc
+
+
+class Branch(BaseModel):
+    """One named output of a routing transform (Case, Conditional Split, ...)."""
+
+    name: str
+    condition: Optional[str] = None
+    is_default: bool = False
+
+
+class LookupRef(BaseModel):
+    """A lookup against a reference table, as a function call or a transform."""
+
+    function: str  # e.g. "lookup_ext", "lookup", "lookup_transform"
+    table: Optional[TableRef] = None  # None when it cannot be resolved statically
+    return_columns: list[str] = Field(default_factory=list)
+    match_columns: list[tuple[str, str]] = Field(default_factory=list)  # (lookup column, input expression)
+    output_column: Optional[str] = None  # mapped column that uses it; None for a lookup transform
+    raw: Optional[str] = None  # original call text, always kept
+
+
 class Transform(BaseModel):
     name: str
     kind: str  # query, table_source, table_target, lookup, case, merge, ... or "opaque"
@@ -63,6 +98,12 @@ class Transform(BaseModel):
     table: Optional[TableRef] = None
     columns: list[ColumnMapping] = Field(default_factory=list)
     where: Optional[str] = None
+    joins: list[Join] = Field(default_factory=list)
+    group_by: list[str] = Field(default_factory=list)
+    order_by: list[SortKey] = Field(default_factory=list)
+    branches: list[Branch] = Field(default_factory=list)
+    lookups: list[LookupRef] = Field(default_factory=list)
+    options: dict[str, str] = Field(default_factory=dict)  # tool-specific extras (load mode, cache policy...)
     raw_tag: Optional[str] = None  # original element name, kept for opaque nodes
 
 
