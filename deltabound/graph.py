@@ -50,9 +50,39 @@ def missing_references(estate: Estate) -> list[str]:
     return sorted(n for n, d in g.nodes(data=True) if d["kind"] == "missing")
 
 
+# Transforms that pass their input columns through unchanged when they do not
+# declare columns of their own (row routing, comparison, key/flag handling).
+PASS_THROUGH_KINDS = {
+    "case", "merge", "validation", "table_comparison", "history_preserving",
+    "key_generation", "map_operation", "lookup",
+}
+TARGET_KINDS = {"table_target", "file_target"}
+
+
 def column_lineage(estate: Estate, dataflow: str) -> nx.DiGraph:
-    """Column-level lineage inside one dataflow: 'transform.column' nodes."""
+    """Column-level lineage inside one dataflow: 'transform.column' nodes.
+
+    Targets are named by their qualified table. Lineage passes through
+    PASS_THROUGH_KINDS transforms and Case branch outputs; it stops at opaque
+    transforms, whose behaviour is unknown.
+    """
     df = estate.objects[dataflow]
+    by_name = {t.name: t for t in df.transforms}
+    branch_owner = {b.name: t.name for t in df.transforms for b in t.branches}
+
+    def out_cols(output: str, seen: frozenset[str]) -> list[str]:
+        """Columns available at a transform output or a Case branch."""
+        tr = by_name.get(branch_owner.get(output, output))
+        if tr is None or tr.name in seen:
+            return []
+        if tr.columns:
+            return [c.column for c in tr.columns]
+        if tr.kind not in PASS_THROUGH_KINDS:
+            return []
+        cols = [c for i in tr.inputs for c in out_cols(i, seen | {tr.name})]
+        cols += [r for lk in tr.lookups if lk.output_column is None for r in lk.return_columns]
+        return list(dict.fromkeys(cols))
+
     g = nx.DiGraph()
     for tr in df.transforms:
         for col in tr.columns:
@@ -60,11 +90,19 @@ def column_lineage(estate: Estate, dataflow: str) -> nx.DiGraph:
             g.add_node(node, expression=col.expression)
             for src in col.source_columns:
                 g.add_edge(src, node)
-        if tr.kind in ("table_target", "file_target") and len(tr.inputs) == 1:
-            upstream = next((t for t in df.transforms if t.name == tr.inputs[0]), None)
-            target = tr.table.qualified if tr.table else tr.name
-            for col in upstream.columns if upstream else []:
-                g.add_edge(f"{upstream.name}.{col.column}", f"{target}.{col.column}")
+        if tr.columns or tr.kind not in PASS_THROUGH_KINDS | TARGET_KINDS:
+            continue
+        out = (tr.table.qualified if tr.table else tr.name) if tr.kind in TARGET_KINDS else tr.name
+        for i in tr.inputs:
+            for c in out_cols(i, frozenset()):
+                g.add_edge(f"{i}.{c}", f"{out}.{c}")
+        for lk in tr.lookups:
+            if lk.output_column is None and lk.table is not None:
+                for r in lk.return_columns:
+                    g.add_edge(f"{lk.table.qualified}.{r}", f"{out}.{r}")
+        for b in tr.branches:
+            for c in out_cols(tr.name, frozenset()):
+                g.add_edge(f"{tr.name}.{c}", f"{b.name}.{c}")
     return g
 
 
@@ -82,6 +120,27 @@ COMPLEXITY_WEIGHTS = {
 }
 
 
+def call_depth(estate: Estate, name: str, g: nx.DiGraph | None = None) -> int:
+    """Objects on the longest call path starting at `name` (1 = calls nothing).
+
+    Memoized depth-first search: linear in the size of the call graph. A call
+    cycle (should not happen in BODS) is cut where it closes.
+    """
+    g = call_graph(estate) if g is None else g
+    if name not in g:
+        return 1
+    memo: dict[str, int] = {}
+
+    def depth(n: str, stack: frozenset[str]) -> int:
+        if n in memo:
+            return memo[n]
+        d = 1 + max((depth(s, stack | {n}) for s in g.successors(n) if s not in stack | {n}), default=0)
+        memo[n] = d
+        return d
+
+    return depth(name, frozenset())
+
+
 def complexity(estate: Estate, name: str) -> int:
     """Rough migration-effort score for a job: transforms, conditions, scripts, nesting."""
     g = call_graph(estate)
@@ -94,8 +153,7 @@ def complexity(estate: Estate, name: str) -> int:
             continue
         score += sum(COMPLEXITY_WEIGHTS.get(t.kind, 0) for t in obj.transforms)
         score += 3 * len(obj.scripts) + 2 * sum(1 for c in obj.calls if c.condition)
-    depth = max((len(p) for p in nx.all_simple_paths(g, name, list(nodes - {name}))), default=1) if len(nodes) > 1 else 1
-    return score + 2 * depth
+    return score + 2 * call_depth(estate, name, g)
 
 
 def migration_waves(estate: Estate, size: int = 10) -> list[list[tuple[str, int]]]:
