@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Retired objects nobody calls any more (dead code)
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIWorkflow name="WF_ARCHIVE_2018" description="Old archive project, retired">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_OLD_RETURNS_2019" />
+      <DICallStep calledObjectType="Dataflow" name="DF_LEGACY_POS_SALES" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_OLD_RETURNS_2019">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_RETURNS_2019" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LEGACY_POS_LOAD" description="Replaced by WF_POS_INTRADAY">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_LEGACY_POS_SALES" />
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_STG_RETURNS_2019">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="ZRETURNS_OLD" />
+      <DIQuery name="Q_RET_2019">
+        <DIInputView name="ZRETURNS_OLD" />
+        <DISchema name="Q_RET_2019">
+          <DIElement name="RETURN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="ZRETURNS_OLD.RETNR" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="ZRETURNS_OLD.MENGE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_RETURNS_2019" loadMode="append">
+        <DIInputView name="Q_RET_2019" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_LEGACY_POS_SALES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_POS_OLD" ownerName="POS" tableName="SALES_V1" />
+      <DISQLTransform name="SQL_LEGACY_POS" sqlText="SELECT STORE, SKU, SUM(QTY) AS QTY FROM POS.SALES_V1 GROUP BY STORE, SKU">
+        <DIInputView name="SALES_V1" />
+      </DISQLTransform>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_POS_LEGACY" loadMode="append">
+        <DIInputView name="SQL_LEGACY_POS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_UNUSED_PRICE_COPY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="KONP" />
+      <DIQuery name="Q_PRICE">
+        <DIInputView name="KONP" />
+        <DISchema name="Q_PRICE">
+          <DIElement name="CONDITION_NO" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="KONP.KNUMH" />
+          </DIElement>
+          <DIElement name="PRICE" type="decimal(11,2)">
+            <DIAttribute name="ui_mapping_text" value="KONP.KBETR" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_PRICE_COPY" loadMode="append">
+        <DIInputView name="Q_PRICE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

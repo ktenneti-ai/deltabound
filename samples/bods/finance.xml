@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: General ledger, FX and margin
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIJob name="JOB_FINANCE_GL" description="General ledger postings">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_PERIOD_CLOSE" dataType="varchar(1)" scope="global" defaultValue="N" />
+    <DIVariable name="$G_COMPANY_CODE" dataType="varchar(4)" scope="global" defaultValue="1000" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_FINANCE_GL" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_FX_RATES" description="FX rates load and publish">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_ERROR_TEXT" dataType="varchar(255)" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_LOAD_FX_RATES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FX_RATES_PUBLISH" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_MARGIN_ANALYSIS" description="Product margin in EUR">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_ERROR_TEXT" dataType="varchar(255)" scope="global" />
+    <DIVariable name="$G_FX_TABLE" dataType="varchar(64)" scope="global" defaultValue="DS_DWH.STG.STG_FX_RATES" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_MARGIN" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIJob>
+  <DIWorkflow name="WF_FINANCE_GL">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_GL_STAGE" />
+      <DICallStep calledObjectType="Workflow" name="WF_GL_MART" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_GL_STAGE">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_GL_HEADERS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_GL_LINES" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_GL_MART">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_COST_CENTER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_GL_ACCOUNT" />
+      <DIIf condition="$G_PERIOD_CLOSE = 'Y'">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_FACT_GL_PERIOD_CLOSE" />
+        </DIThen>
+        <DIElse>
+          <DICallStep calledObjectType="Dataflow" name="DF_FACT_GL_DAILY" />
+        </DIElse>
+      </DIIf>
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_MARGIN">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_LOAD_FX_RATES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_MARGIN" />
+      <DICallStep calledObjectType="Dataflow" name="DF_AGG_MARGIN_BY_CATEGORY" />
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_STG_GL_HEADERS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="BKPF" />
+      <DIQuery name="Q_GL_HDR">
+        <DIInputView name="BKPF" />
+        <DISchema name="Q_GL_HDR">
+          <DIElement name="COMPANY_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="BKPF.BUKRS" />
+          </DIElement>
+          <DIElement name="DOC_NO" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="BKPF.BELNR" />
+          </DIElement>
+          <DIElement name="FISCAL_YEAR" type="int">
+            <DIAttribute name="ui_mapping_text" value="BKPF.GJAHR" />
+          </DIElement>
+          <DIElement name="POSTING_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(BKPF.BUDAT, 'YYYYMMDD')" />
+          </DIElement>
+          <DIElement name="DOC_TYPE" type="varchar(2)">
+            <DIAttribute name="ui_mapping_text" value="BKPF.BLART" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="BKPF.BUKRS = $G_COMPANY_CODE" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_HEADER" loadMode="truncate">
+        <DIInputView name="Q_GL_HDR" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_GL_LINES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="BSEG" />
+      <DIQuery name="Q_GL_LINE">
+        <DIInputView name="BSEG" />
+        <DISchema name="Q_GL_LINE">
+          <DIElement name="COMPANY_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="BSEG.BUKRS" />
+          </DIElement>
+          <DIElement name="DOC_NO" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="BSEG.BELNR" />
+          </DIElement>
+          <DIElement name="FISCAL_YEAR" type="int">
+            <DIAttribute name="ui_mapping_text" value="BSEG.GJAHR" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="BSEG.BUZEI" />
+          </DIElement>
+          <DIElement name="GL_ACCOUNT" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="BSEG.HKONT" />
+          </DIElement>
+          <DIElement name="COST_CENTER" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="BSEG.KOSTL" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="ifthenelse(BSEG.SHKZG = 'H', -BSEG.DMBTR, BSEG.DMBTR)" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="BSEG.BUKRS = $G_COMPANY_CODE" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_LINE" loadMode="truncate">
+        <DIInputView name="Q_GL_LINE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_COST_CENTER">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="CSKS" />
+      <DIQuery name="Q_CC">
+        <DIInputView name="CSKS" />
+        <DISchema name="Q_CC">
+          <DIElement name="COST_CENTER" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="CSKS.KOSTL" />
+          </DIElement>
+          <DIElement name="CONTROLLING_AREA" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="CSKS.KOKRS" />
+          </DIElement>
+          <DIElement name="VALID_TO" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(CSKS.DATBI, 'YYYYMMDD')" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_CC" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_COST_CENTER" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_CC" />
+      </DITableComparison>
+      <DIKeyGeneration name="KG_CC" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_COST_CENTER" keyColumn="COST_CENTER_KEY">
+        <DIInputView name="TC_CC" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_COST_CENTER" loadMode="append">
+        <DIInputView name="KG_CC" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_GL_ACCOUNT">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="SKA1" />
+      <DIQuery name="Q_ACCT">
+        <DIInputView name="SKA1" />
+        <DISchema name="Q_ACCT">
+          <DIElement name="GL_ACCOUNT" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="SKA1.SAKNR" />
+          </DIElement>
+          <DIElement name="CHART_OF_ACCOUNTS" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="SKA1.KTOPL" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="SKA1.KTOPL = 'FRCA'" />
+      </DIQuery>
+      <DITableComparison name="TC_ACCT" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_GL_ACCOUNT" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_ACCT" />
+      </DITableComparison>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_GL_ACCOUNT" loadMode="append">
+        <DIInputView name="TC_ACCT" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_GL_DAILY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_HEADER" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_LINE" />
+      <DIQuery name="Q_GL">
+        <DIInputView name="STG_GL_HEADER" />
+        <DIInputView name="STG_GL_LINE" />
+        <DISchema name="Q_GL">
+          <DIElement name="POSTING_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_HEADER.POSTING_DATE" />
+          </DIElement>
+          <DIElement name="DOC_NO" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_HEADER.DOC_NO" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_LINE.LINE_NO" />
+          </DIElement>
+          <DIElement name="GL_ACCOUNT" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_LINE.GL_ACCOUNT" />
+          </DIElement>
+          <DIElement name="COST_CENTER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_COST_CENTER,'PRE_LOAD_CACHE','MAX'],[COST_CENTER_KEY],[-1],[COST_CENTER,'=',STG_GL_LINE.COST_CENTER])" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_LINE.AMOUNT" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="STG_GL_HEADER" rightSchema="STG_GL_LINE" joinType="INNER" expr="STG_GL_HEADER.COMPANY_CODE = STG_GL_LINE.COMPANY_CODE AND STG_GL_HEADER.DOC_NO = STG_GL_LINE.DOC_NO AND STG_GL_HEADER.FISCAL_YEAR = STG_GL_LINE.FISCAL_YEAR" />
+        </DIJoins>
+        <DIWhereClause expr="STG_GL_HEADER.POSTING_DATE = $G_LOAD_DATE - 1" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_GL" loadMode="append">
+        <DIInputView name="Q_GL" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_GL_PERIOD_CLOSE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_HEADER" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_GL_LINE" />
+      <DIQuery name="Q_GL_PERIOD">
+        <DIInputView name="STG_GL_HEADER" />
+        <DIInputView name="STG_GL_LINE" />
+        <DISchema name="Q_GL_PERIOD">
+          <DIElement name="PERIOD" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="to_char(STG_GL_HEADER.POSTING_DATE, 'YYYYMM')" />
+          </DIElement>
+          <DIElement name="GL_ACCOUNT" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_GL_LINE.GL_ACCOUNT" />
+          </DIElement>
+          <DIElement name="BALANCE" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="sum(STG_GL_LINE.AMOUNT)" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="STG_GL_HEADER" rightSchema="STG_GL_LINE" joinType="INNER" expr="STG_GL_HEADER.COMPANY_CODE = STG_GL_LINE.COMPANY_CODE AND STG_GL_HEADER.DOC_NO = STG_GL_LINE.DOC_NO AND STG_GL_HEADER.FISCAL_YEAR = STG_GL_LINE.FISCAL_YEAR" />
+        </DIJoins>
+        <DIGroupBy>
+          <DIExpression expr="to_char(STG_GL_HEADER.POSTING_DATE, 'YYYYMM')" />
+          <DIExpression expr="STG_GL_LINE.GL_ACCOUNT" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="STG_GL_LINE.GL_ACCOUNT" sortType="ASC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_GL_PERIOD" loadMode="append">
+        <DIInputView name="Q_GL_PERIOD" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_MARGIN">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_SALES" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="PRODUCT_COST" />
+      <DIQuery name="Q_MARGIN">
+        <DIInputView name="FACT_SALES" />
+        <DIInputView name="PRODUCT_COST" />
+        <DISchema name="Q_MARGIN">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.ORDER_ID" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="REVENUE" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.LINE_AMOUNT" />
+          </DIElement>
+          <DIElement name="COST" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.QTY * nvl(PRODUCT_COST.UNIT_COST, 0)" />
+          </DIElement>
+          <DIElement name="FX_RATE" type="decimal(9,5)">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.STG.STG_FX_RATES,'PRE_LOAD_CACHE','MAX'],[RATE],[1],[FROM_CCY,'=',PRODUCT_COST.CURRENCY,TO_CCY,'=','EUR'])" />
+          </DIElement>
+          <DIElement name="MARGIN" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.LINE_AMOUNT - FACT_SALES.QTY * nvl(PRODUCT_COST.UNIT_COST, 0)" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="FACT_SALES" rightSchema="PRODUCT_COST" joinType="LEFT OUTER" expr="FACT_SALES.PRODUCT_KEY = PRODUCT_COST.PRODUCT_KEY AND FACT_SALES.ORDER_DATE BETWEEN PRODUCT_COST.VALID_FROM AND PRODUCT_COST.VALID_TO" />
+        </DIJoins>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_MARGIN" loadMode="append">
+        <DIInputView name="Q_MARGIN" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_AGG_MARGIN_BY_CATEGORY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_MARGIN" />
+      <DIQuery name="Q_CAT">
+        <DIInputView name="FACT_MARGIN" />
+        <DISchema name="Q_CAT">
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_MARGIN.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="CATEGORY" type="varchar(9)">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_GROUP],['UNKNOWN'],[PRODUCT_KEY,'=',FACT_MARGIN.PRODUCT_KEY])" />
+          </DIElement>
+          <DIElement name="TOTAL_MARGIN" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_MARGIN.MARGIN)" />
+          </DIElement>
+          <DIElement name="MARGIN_USD" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_MARGIN.MARGIN * lookup_ext([$G_FX_TABLE,'NO_CACHE','MAX'],[RATE],[1],[FROM_CCY,'=','EUR',TO_CCY,'=','USD']))" />
+          </DIElement>
+        </DISchema>
+        <DIGroupBy>
+          <DIExpression expr="FACT_MARGIN.PRODUCT_KEY" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="sum(FACT_MARGIN.MARGIN)" sortType="DESC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="AGG_MARGIN_BY_CATEGORY" loadMode="truncate">
+        <DIInputView name="Q_CAT" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FX_RATES_PUBLISH">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_FX_RATES" />
+      <DIQuery name="Q_FX_PUB">
+        <DIInputView name="STG_FX_RATES" />
+        <DISchema name="Q_FX_PUB">
+          <DIElement name="FROM_CCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="STG_FX_RATES.FROM_CCY" />
+          </DIElement>
+          <DIElement name="TO_CCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="STG_FX_RATES.TO_CCY" />
+          </DIElement>
+          <DIElement name="RATE" type="decimal(9,5)">
+            <DIAttribute name="ui_mapping_text" value="STG_FX_RATES.RATE" />
+          </DIElement>
+          <DIElement name="VALID_FROM" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_FX_RATES.VALID_FROM" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="STG_FX_RATES.RATE_TYPE = 'M'" />
+        <DIOrderBy>
+          <DIExpression expr="STG_FX_RATES.FROM_CCY" sortType="ASC" />
+          <DIExpression expr="STG_FX_RATES.TO_CCY" sortType="ASC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIFileTarget name="FF_FX_RATES_OUT" fileFormat="FMT_FX_CSV" fileName="fx_rates_[$G_LOAD_DATE].csv">
+        <DIInputView name="Q_FX_PUB" />
+      </DIFileTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

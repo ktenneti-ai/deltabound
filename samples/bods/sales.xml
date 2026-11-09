@@ -1,0 +1,604 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Sales orders, invoices, POS and returns
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIJob name="JOB_SALES_DAILY" description="Daily load of orders, invoices and the sales mart">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_FULL_LOAD" dataType="varchar(1)" scope="global" defaultValue="N" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_REGION" dataType="varchar(10)" scope="global" defaultValue="ALL" />
+    <DIVariable name="$G_ERROR_TEXT" dataType="varchar(255)" scope="global" />
+    <DISteps>
+      <DIScript>$G_LOAD_DATE = sysdate();</DIScript>
+      <DICallStep calledObjectType="Workflow" name="WF_SALES_DAILY_MAIN" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_SALES_MONTH_END" description="Month-end sales close and snapshot">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_PERIOD" dataType="varchar(6)" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_REGION" dataType="varchar(10)" scope="global" defaultValue="ALL" />
+    <DISteps>
+      <DIScript>$G_LOAD_DATE = sysdate();
+$G_PERIOD = to_char(add_months($G_LOAD_DATE, -1), 'YYYYMM');</DIScript>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_MONTH_END_CLOSE" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_POS_INTRADAY" description="Hourly point-of-sale load, one file per store">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_POS_INTRADAY" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_RETURNS_DAILY" description="Daily store returns">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_RETURNS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_RETURNS" />
+    </DISteps>
+  </DIJob>
+  <DIWorkflow name="WF_SALES_DAILY_MAIN">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DITryCatch name="TRY_SALES">
+        <DITry>
+          <DICallStep calledObjectType="Workflow" name="WF_STAGE_SALES" />
+          <DICallStep calledObjectType="Workflow" name="WF_LOAD_SALES_MART" />
+        </DITry>
+        <DICatch exceptionGroup="ALL">
+          <DIScript>$G_ERROR_TEXT = error_message();</DIScript>
+          <DICallStep calledObjectType="Dataflow" name="DF_CTL_JOB_ERROR" />
+          <DIScript>raise_exception($G_ERROR_TEXT);</DIScript>
+        </DICatch>
+      </DITryCatch>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_STAGE_SALES">
+    <DISteps>
+      <DIIf condition="$G_FULL_LOAD = 'Y'">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_STG_ORDERS_FULL" />
+        </DIThen>
+        <DIElse>
+          <DICallStep calledObjectType="Dataflow" name="DF_STG_ORDERS_DELTA" />
+        </DIElse>
+      </DIIf>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_ORDER_ITEMS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_INVOICES" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LOAD_SALES_MART">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_SHARED_DIMENSIONS" />
+      <DICallStep calledObjectType="Workflow" name="WF_SALES_FACTS" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_SALES_FACTS">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_SALES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_INVOICE" />
+      <DIIf condition="$G_REGION = 'ALL'">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_AGG_SALES_DAILY" />
+        </DIThen>
+      </DIIf>
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_MONTH_END_CLOSE">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_SALES_FACTS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_AGG_SALES_MONTHLY" />
+      <DICallStep calledObjectType="Dataflow" name="DF_SNAPSHOT_SALES_MONTH" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_POS_INTRADAY">
+    <DIVariable name="$L_STORE_IDX" dataType="int" scope="local" defaultValue="1" />
+    <DIVariable name="$L_STORE_COUNT" dataType="int" scope="local" />
+    <DISteps>
+      <DIScript>$L_STORE_COUNT = sql('DS_POS', 'SELECT COUNT(*) FROM POS.STORES WHERE ACTIVE = 1');</DIScript>
+      <DIWhileStep condition="$L_STORE_IDX &lt;= $L_STORE_COUNT">
+        <DISteps>
+          <DICallStep calledObjectType="Dataflow" name="DF_STG_POS_TRANSACTIONS" />
+          <DIScript>$L_STORE_IDX = $L_STORE_IDX + 1;</DIScript>
+        </DISteps>
+      </DIWhileStep>
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_POS_SALES" />
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_STG_ORDERS_DELTA">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="VBAK" />
+      <DIQuery name="Q_ORDERS">
+        <DIInputView name="VBAK" />
+        <DISchema name="Q_ORDERS">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.VBELN" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(VBAK.ERDAT, 'YYYYMMDD')" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.KUNNR" />
+          </DIElement>
+          <DIElement name="NET_AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="round(VBAK.NETWR, 2)" />
+          </DIElement>
+          <DIElement name="CURRENCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.WAERK" />
+          </DIElement>
+          <DIElement name="SALES_ORG" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.VKORG" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="VBAK.ERDAT &gt;= to_char($G_LOAD_DATE - 1, 'YYYYMMDD')" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_ORDERS" loadMode="append">
+        <DIInputView name="Q_ORDERS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_ORDERS_FULL">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="VBAK" />
+      <DIQuery name="Q_ORDERS_ALL">
+        <DIInputView name="VBAK" />
+        <DISchema name="Q_ORDERS_ALL">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.VBELN" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(VBAK.ERDAT, 'YYYYMMDD')" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.KUNNR" />
+          </DIElement>
+          <DIElement name="NET_AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="round(VBAK.NETWR, 2)" />
+          </DIElement>
+          <DIElement name="CURRENCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.WAERK" />
+          </DIElement>
+          <DIElement name="SALES_ORG" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="VBAK.VKORG" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_ORDERS" loadMode="truncate">
+        <DIInputView name="Q_ORDERS_ALL" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_ORDER_ITEMS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="VBAP" />
+      <DIQuery name="Q_ITEMS">
+        <DIInputView name="VBAP" />
+        <DISchema name="Q_ITEMS">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBAP.VBELN" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="VBAP.POSNR" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="VBAP.MATNR" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="VBAP.KWMENG" />
+          </DIElement>
+          <DIElement name="LINE_NET" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="VBAP.NETWR" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_ORDER_ITEMS" loadMode="append">
+        <DIInputView name="Q_ITEMS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_INVOICES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="VBRK" />
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="VBRP" />
+      <DIQuery name="Q_INVOICES">
+        <DIInputView name="VBRK" />
+        <DIInputView name="VBRP" />
+        <DISchema name="Q_INVOICES">
+          <DIElement name="INVOICE_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBRK.VBELN" />
+          </DIElement>
+          <DIElement name="INVOICE_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(VBRK.FKDAT, 'YYYYMMDD')" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBRK.KUNAG" />
+          </DIElement>
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="VBRP.AUBEL" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="VBRP.NETWR" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="VBRK" rightSchema="VBRP" joinType="INNER" expr="VBRK.VBELN = VBRP.VBELN" />
+        </DIJoins>
+        <DIWhereClause expr="VBRK.FKDAT &gt;= to_char($G_LOAD_DATE - 1, 'YYYYMMDD')" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_INVOICES" loadMode="append">
+        <DIInputView name="Q_INVOICES" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_SALES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_ORDERS" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_ORDER_ITEMS" />
+      <DIQuery name="Q_JOIN">
+        <DIInputView name="STG_ORDERS" />
+        <DIInputView name="STG_ORDER_ITEMS" />
+        <DISchema name="Q_JOIN">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_ORDERS.ORDER_ID" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="STG_ORDER_ITEMS.LINE_NO" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_ORDERS.ORDER_DATE" />
+          </DIElement>
+          <DIElement name="CUSTOMER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_CUSTOMER,'PRE_LOAD_CACHE','MAX'],[CUSTOMER_KEY],[-1],[CUSTOMER_ID,'=',STG_ORDERS.CUSTOMER_ID])" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_KEY],[-1],[PRODUCT_ID,'=',STG_ORDER_ITEMS.PRODUCT_ID])" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="STG_ORDER_ITEMS.QTY" />
+          </DIElement>
+          <DIElement name="LINE_AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_ORDER_ITEMS.LINE_NET" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="STG_ORDERS" rightSchema="STG_ORDER_ITEMS" joinType="INNER" expr="STG_ORDERS.ORDER_ID = STG_ORDER_ITEMS.ORDER_ID" />
+        </DIJoins>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_SALES" loadMode="append">
+        <DIInputView name="Q_JOIN" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_INVOICE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_INVOICES" />
+      <DIQuery name="Q_INV">
+        <DIInputView name="STG_INVOICES" />
+        <DISchema name="Q_INV">
+          <DIElement name="INVOICE_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_INVOICES.INVOICE_ID" />
+          </DIElement>
+          <DIElement name="INVOICE_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_INVOICES.INVOICE_DATE" />
+          </DIElement>
+          <DIElement name="CUSTOMER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_CUSTOMER,'PRE_LOAD_CACHE','MAX'],[CUSTOMER_KEY],[-1],[CUSTOMER_ID,'=',STG_INVOICES.CUSTOMER_ID])" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_INVOICES.AMOUNT" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_INVOICE" loadMode="append">
+        <DIInputView name="Q_INV" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_AGG_SALES_DAILY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_SALES" />
+      <DIQuery name="Q_AGG_DAY">
+        <DIInputView name="FACT_SALES" />
+        <DISchema name="Q_AGG_DAY">
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.ORDER_DATE" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="TOTAL_QTY" type="decimal(15,3)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_SALES.QTY)" />
+          </DIElement>
+          <DIElement name="TOTAL_AMOUNT" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_SALES.LINE_AMOUNT)" />
+          </DIElement>
+          <DIElement name="ORDER_COUNT" type="int">
+            <DIAttribute name="ui_mapping_text" value="count_distinct(FACT_SALES.ORDER_ID)" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="FACT_SALES.ORDER_DATE = $G_LOAD_DATE - 1" />
+        <DIGroupBy>
+          <DIExpression expr="FACT_SALES.ORDER_DATE" />
+          <DIExpression expr="FACT_SALES.PRODUCT_KEY" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="FACT_SALES.ORDER_DATE" sortType="ASC" />
+          <DIExpression expr="sum(FACT_SALES.LINE_AMOUNT)" sortType="DESC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="AGG_SALES_DAILY" loadMode="append">
+        <DIInputView name="Q_AGG_DAY" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_AGG_SALES_MONTHLY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_SALES" />
+      <DIQuery name="Q_AGG_MONTH">
+        <DIInputView name="FACT_SALES" />
+        <DISchema name="Q_AGG_MONTH">
+          <DIElement name="PERIOD" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="to_char(FACT_SALES.ORDER_DATE, 'YYYYMM')" />
+          </DIElement>
+          <DIElement name="CUSTOMER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.CUSTOMER_KEY" />
+          </DIElement>
+          <DIElement name="TOTAL_AMOUNT" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_SALES.LINE_AMOUNT)" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="to_char(FACT_SALES.ORDER_DATE, 'YYYYMM') = $G_PERIOD" />
+        <DIGroupBy>
+          <DIExpression expr="to_char(FACT_SALES.ORDER_DATE, 'YYYYMM')" />
+          <DIExpression expr="FACT_SALES.CUSTOMER_KEY" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="FACT_SALES.CUSTOMER_KEY" sortType="ASC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="AGG_SALES_MONTHLY" loadMode="truncate">
+        <DIInputView name="Q_AGG_MONTH" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_SNAPSHOT_SALES_MONTH">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="AGG_SALES_MONTHLY" />
+      <DIDataTransfer name="DT_STAGE" transferType="TABLE">
+        <DIInputView name="AGG_SALES_MONTHLY" />
+      </DIDataTransfer>
+      <DIQuery name="Q_SNAP">
+        <DIInputView name="DT_STAGE" />
+        <DISchema name="Q_SNAP">
+          <DIElement name="SNAPSHOT_PERIOD" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="$G_PERIOD" />
+          </DIElement>
+          <DIElement name="CUSTOMER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="DT_STAGE.CUSTOMER_KEY" />
+          </DIElement>
+          <DIElement name="TOTAL_AMOUNT" type="decimal(17,2)">
+            <DIAttribute name="ui_mapping_text" value="DT_STAGE.TOTAL_AMOUNT" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="SNAP_SALES_MONTH" loadMode="append">
+        <DIInputView name="Q_SNAP" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_POS_TRANSACTIONS">
+    <DITransforms>
+      <DIFileSource name="FF_POS_TXN" fileFormat="FMT_POS_TXN_CSV" fileName="pos_txn_[$L_STORE_IDX].csv" />
+      <DIQuery name="Q_POS">
+        <DIInputView name="FF_POS_TXN" />
+        <DISchema name="Q_POS">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="FF_POS_TXN.TXN_ID" />
+          </DIElement>
+          <DIElement name="STORE_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="FF_POS_TXN.STORE" />
+          </DIElement>
+          <DIElement name="TXN_TS" type="datetime">
+            <DIAttribute name="ui_mapping_text" value="to_date(FF_POS_TXN.TXN_TIME, 'YYYY-MM-DD HH24:MI:SS')" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="FF_POS_TXN.SKU" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="FF_POS_TXN.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FF_POS_TXN.AMOUNT" />
+          </DIElement>
+          <DIElement name="CHANNEL" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="upper(FF_POS_TXN.CHANNEL)" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_POS_TXN" loadMode="append">
+        <DIInputView name="Q_POS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_POS_SALES" description="Split POS sales by channel, apply channel rules, merge back">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_POS_TXN" />
+      <DIQuery name="Q_POS_IN">
+        <DIInputView name="STG_POS_TXN" />
+        <DISchema name="Q_POS_IN">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.TXN_ID" />
+          </DIElement>
+          <DIElement name="STORE_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.STORE_CODE" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.PRODUCT_ID" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.AMOUNT" />
+          </DIElement>
+          <DIElement name="CHANNEL" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.CHANNEL" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DICase name="CASE_CHANNEL">
+        <DIInputView name="Q_POS_IN" />
+        <DICaseBranch name="CH_STORE" expr="Q_POS_IN.CHANNEL = 'STORE'" />
+        <DICaseBranch name="CH_KIOSK" expr="Q_POS_IN.CHANNEL = 'KIOSK'" />
+        <DICaseBranch name="CH_OTHER" isDefault="true" />
+      </DICase>
+      <DIQuery name="Q_STORE">
+        <DIInputView name="CH_STORE" />
+        <DISchema name="Q_STORE">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="CH_STORE.TXN_ID" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_STORE.STORE_CODE)" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="CH_STORE.PRODUCT_ID" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="CH_STORE.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="CH_STORE.AMOUNT" />
+          </DIElement>
+          <DIElement name="CHANNEL" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'STORE'" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIQuery name="Q_KIOSK">
+        <DIInputView name="CH_KIOSK" />
+        <DISchema name="Q_KIOSK">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="CH_KIOSK.TXN_ID" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_KIOSK.STORE_CODE)" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="CH_KIOSK.PRODUCT_ID" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="CH_KIOSK.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="CH_KIOSK.AMOUNT * 0.98" />
+          </DIElement>
+          <DIElement name="CHANNEL" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'KIOSK'" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIQuery name="Q_OTHER">
+        <DIInputView name="CH_OTHER" />
+        <DISchema name="Q_OTHER">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="CH_OTHER.TXN_ID" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="-1" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="CH_OTHER.PRODUCT_ID" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="CH_OTHER.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="CH_OTHER.AMOUNT" />
+          </DIElement>
+          <DIElement name="CHANNEL" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'OTHER'" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIMerge name="MRG_CHANNELS">
+        <DIInputView name="Q_STORE" />
+        <DIInputView name="Q_KIOSK" />
+        <DIInputView name="Q_OTHER" />
+      </DIMerge>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_POS_SALES" loadMode="append">
+        <DIInputView name="MRG_CHANNELS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_RETURNS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_POS" ownerName="POS" tableName="RETURNS" />
+      <DIQuery name="Q_RETURNS">
+        <DIInputView name="RETURNS" />
+        <DISchema name="Q_RETURNS">
+          <DIElement name="RETURN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.RETURN_ID" />
+          </DIElement>
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.ORIG_ORDER" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.SKU" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.QTY" />
+          </DIElement>
+          <DIElement name="REASON_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.REASON" />
+          </DIElement>
+          <DIElement name="RETURN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="RETURNS.RETURN_DATE" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="RETURNS.RETURN_DATE = $G_LOAD_DATE - 1" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_RETURNS" loadMode="append">
+        <DIInputView name="Q_RETURNS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_RETURNS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_RETURNS" />
+      <DIQuery name="Q_RET">
+        <DIInputView name="STG_RETURNS" />
+        <DISchema name="Q_RET">
+          <DIElement name="RETURN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_RETURNS.RETURN_ID" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_KEY],[-1],[PRODUCT_ID,'=',STG_RETURNS.PRODUCT_ID])" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="STG_RETURNS.QTY" />
+          </DIElement>
+          <DIElement name="REASON_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="STG_RETURNS.REASON_CODE" />
+          </DIElement>
+          <DIElement name="RETURN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_RETURNS.RETURN_DATE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIValidation name="VAL_RETURNS" rule="Q_RET.QTY &gt; 0 AND Q_RET.REASON_CODE IS NOT NULL">
+        <DIInputView name="Q_RET" />
+      </DIValidation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_RETURNS" loadMode="append">
+        <DIInputView name="VAL_RETURNS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

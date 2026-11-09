@@ -4,7 +4,7 @@ from deltabound import graph
 from deltabound.ir import ObjectKind
 from deltabound.parsers import bods
 
-SAMPLE = Path(__file__).parent.parent / "samples" / "bods" / "retail_demo.xml"
+SAMPLE = Path(__file__).parent.parent / "samples" / "bods_mini" / "retail_demo.xml"
 
 
 def estate():

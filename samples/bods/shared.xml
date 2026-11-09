@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Shared dimensions, control and FX dataflows
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIWorkflow name="WF_SHARED_DIMENSIONS" description="Conformed dimensions shared by sales, inventory and master data">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_DIM_CUSTOMER_SCD" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_PRODUCT" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_STORE" />
+      <DIIf condition="day_in_month($G_LOAD_DATE) = 1">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_DIM_DATE" />
+        </DIThen>
+      </DIIf>
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_DIM_CUSTOMER_SCD">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_CUSTOMER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_CUSTOMER" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_JOB_START">
+    <DIVariable name="$L_RUN_ID" dataType="int" scope="local" />
+    <DISteps>
+      <DIScript>$G_JOB_NAME = job_name();
+print('Starting [$G_JOB_NAME]');</DIScript>
+      <DICallStep calledObjectType="Dataflow" name="DF_CTL_JOB_START" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_JOB_END">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_CTL_JOB_END" />
+      <DIScript>print('Finished [$G_JOB_NAME]');</DIScript>
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LOAD_FX_RATES" description="Load FX rates with up to 3 retries">
+    <DIVariable name="$L_RETRY" dataType="int" scope="local" defaultValue="0" />
+    <DIVariable name="$L_DONE" dataType="varchar(1)" scope="local" defaultValue="N" />
+    <DISteps>
+      <DIWhileStep condition="$L_RETRY &lt; 3 AND $L_DONE = 'N'">
+        <DISteps>
+          <DITryCatch name="TRY_FX">
+            <DITry>
+              <DICallStep calledObjectType="Dataflow" name="DF_STG_FX_RATES" />
+              <DIScript>$L_DONE = 'Y';</DIScript>
+            </DITry>
+            <DICatch exceptionGroup="DATABASE">
+              <DIScript>$L_RETRY = $L_RETRY + 1;
+sleep(60000);</DIScript>
+            </DICatch>
+          </DITryCatch>
+        </DISteps>
+      </DIWhileStep>
+      <DIIf condition="$L_DONE = 'N'">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_CTL_JOB_ERROR" />
+          <DIScript>raise_exception('FX rates could not be loaded');</DIScript>
+        </DIThen>
+      </DIIf>
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_STG_CUSTOMER">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="KNA1" />
+      <DIQuery name="Q_CUSTOMER">
+        <DIInputView name="KNA1" />
+        <DISchema name="Q_CUSTOMER">
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="KNA1.KUNNR" />
+          </DIElement>
+          <DIElement name="CUSTOMER_NAME" type="varchar(80)">
+            <DIAttribute name="ui_mapping_text" value="upper(KNA1.NAME1)" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="KNA1.LAND1" />
+          </DIElement>
+          <DIElement name="CITY" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="KNA1.ORT01" />
+          </DIElement>
+          <DIElement name="POSTCODE" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="KNA1.PSTLZ" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_CUSTOMER" loadMode="truncate">
+        <DIInputView name="Q_CUSTOMER" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_CUSTOMER" description="Customer dimension, SCD type 2">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_CUSTOMER" />
+      <DIQuery name="Q_CUST">
+        <DIInputView name="STG_CUSTOMER" />
+        <DISchema name="Q_CUST">
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_CUSTOMER.CUSTOMER_ID" />
+          </DIElement>
+          <DIElement name="CUSTOMER_NAME" type="varchar(80)">
+            <DIAttribute name="ui_mapping_text" value="STG_CUSTOMER.CUSTOMER_NAME" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="STG_CUSTOMER.COUNTRY" />
+          </DIElement>
+          <DIElement name="CITY" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="initcap(STG_CUSTOMER.CITY)" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_CUST" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_CUSTOMER" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_CUST" />
+      </DITableComparison>
+      <DIHistoryPreserving name="HP_CUST" validFromColumn="VALID_FROM" validToColumn="VALID_TO">
+        <DIInputView name="TC_CUST" />
+      </DIHistoryPreserving>
+      <DIKeyGeneration name="KG_CUST" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_CUSTOMER" keyColumn="CUSTOMER_KEY">
+        <DIInputView name="HP_CUST" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_CUSTOMER" loadMode="append">
+        <DIInputView name="KG_CUST" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_PRODUCT">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="MARA" />
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="MAKT" />
+      <DIQuery name="Q_PRODUCT">
+        <DIInputView name="MARA" />
+        <DIInputView name="MAKT" />
+        <DISchema name="Q_PRODUCT">
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="MARA.MATNR" />
+          </DIElement>
+          <DIElement name="PRODUCT_NAME" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="nvl(MAKT.MAKTX, 'UNKNOWN')" />
+          </DIElement>
+          <DIElement name="PRODUCT_GROUP" type="varchar(9)">
+            <DIAttribute name="ui_mapping_text" value="MARA.MATKL" />
+          </DIElement>
+          <DIElement name="PRODUCT_TYPE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="MARA.MTART" />
+          </DIElement>
+          <DIElement name="UOM" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="MARA.MEINS" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="MARA" rightSchema="MAKT" joinType="LEFT OUTER" expr="MARA.MATNR = MAKT.MATNR AND MAKT.SPRAS = 'E'" />
+        </DIJoins>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_PRODUCT" loadMode="truncate">
+        <DIInputView name="Q_PRODUCT" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_PRODUCT" description="Product dimension, SCD type 1">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_PRODUCT" />
+      <DIQuery name="Q_PROD">
+        <DIInputView name="STG_PRODUCT" />
+        <DISchema name="Q_PROD">
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="STG_PRODUCT.PRODUCT_ID" />
+          </DIElement>
+          <DIElement name="PRODUCT_NAME" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="STG_PRODUCT.PRODUCT_NAME" />
+          </DIElement>
+          <DIElement name="PRODUCT_GROUP" type="varchar(9)">
+            <DIAttribute name="ui_mapping_text" value="STG_PRODUCT.PRODUCT_GROUP" />
+          </DIElement>
+          <DIElement name="PRODUCT_TYPE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="STG_PRODUCT.PRODUCT_TYPE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_PROD" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_PRODUCT" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_PROD" />
+      </DITableComparison>
+      <DIKeyGeneration name="KG_PROD" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_PRODUCT" keyColumn="PRODUCT_KEY">
+        <DIInputView name="TC_PROD" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_PRODUCT" loadMode="append">
+        <DIInputView name="KG_PROD" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_STORE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="T001W" />
+      <DIQuery name="Q_STORE">
+        <DIInputView name="T001W" />
+        <DISchema name="Q_STORE">
+          <DIElement name="STORE_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="T001W.WERKS" />
+          </DIElement>
+          <DIElement name="STORE_NAME" type="varchar(30)">
+            <DIAttribute name="ui_mapping_text" value="T001W.NAME1" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="T001W.LAND1" />
+          </DIElement>
+          <DIElement name="REGION" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="T001W.REGIO" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="T001W.WERKS LIKE 'S%'" />
+      </DIQuery>
+      <DITableComparison name="TC_STORE" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_STORE" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_STORE" />
+      </DITableComparison>
+      <DIKeyGeneration name="KG_STORE" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_STORE" keyColumn="STORE_KEY">
+        <DIInputView name="TC_STORE" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_STORE" loadMode="append">
+        <DIInputView name="KG_STORE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_DATE">
+    <DITransforms>
+      <DIDateGeneration name="DG_CALENDAR" startDate="2015.01.01" endDate="2035.12.31" increment="daily" />
+      <DIQuery name="Q_DATE">
+        <DIInputView name="DG_CALENDAR" />
+        <DISchema name="Q_DATE">
+          <DIElement name="DATE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="to_number(to_char(DG_CALENDAR.DI_GENERATED_DATE, 'YYYYMMDD'))" />
+          </DIElement>
+          <DIElement name="CAL_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="DG_CALENDAR.DI_GENERATED_DATE" />
+          </DIElement>
+          <DIElement name="CAL_MONTH" type="int">
+            <DIAttribute name="ui_mapping_text" value="month(DG_CALENDAR.DI_GENERATED_DATE)" />
+          </DIElement>
+          <DIElement name="CAL_YEAR" type="int">
+            <DIAttribute name="ui_mapping_text" value="year(DG_CALENDAR.DI_GENERATED_DATE)" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_DATE" loadMode="truncate">
+        <DIInputView name="Q_DATE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CTL_JOB_START">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_REGISTRY" />
+      <DIQuery name="Q_RUN_START">
+        <DIInputView name="JOB_REGISTRY" />
+        <DISchema name="Q_RUN_START">
+          <DIElement name="RUN_ID" type="int">
+            <DIAttribute name="ui_mapping_text" value="JOB_REGISTRY.NEXT_RUN_ID" />
+          </DIElement>
+          <DIElement name="JOB_NAME" type="varchar(64)">
+            <DIAttribute name="ui_mapping_text" value="JOB_REGISTRY.JOB_NAME" />
+          </DIElement>
+          <DIElement name="START_TS" type="datetime">
+            <DIAttribute name="ui_mapping_text" value="sysdate()" />
+          </DIElement>
+          <DIElement name="STATUS" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'RUNNING'" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="JOB_REGISTRY.JOB_NAME = $G_JOB_NAME" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_RUN_LOG" loadMode="append">
+        <DIInputView name="Q_RUN_START" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CTL_JOB_END">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_RUN_LOG" />
+      <DIQuery name="Q_RUN_END">
+        <DIInputView name="JOB_RUN_LOG" />
+        <DISchema name="Q_RUN_END">
+          <DIElement name="RUN_ID" type="int">
+            <DIAttribute name="ui_mapping_text" value="JOB_RUN_LOG.RUN_ID" />
+          </DIElement>
+          <DIElement name="END_TS" type="datetime">
+            <DIAttribute name="ui_mapping_text" value="sysdate()" />
+          </DIElement>
+          <DIElement name="STATUS" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'SUCCESS'" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="JOB_RUN_LOG.JOB_NAME = $G_JOB_NAME AND JOB_RUN_LOG.STATUS = 'RUNNING'" />
+      </DIQuery>
+      <DIMapOperation name="MO_RUN_END" mapNormalTo="UPDATE">
+        <DIInputView name="Q_RUN_END" />
+      </DIMapOperation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_RUN_LOG" loadMode="append">
+        <DIInputView name="MO_RUN_END" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CTL_JOB_ERROR">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_RUN_LOG" />
+      <DIQuery name="Q_RUN_ERR">
+        <DIInputView name="JOB_RUN_LOG" />
+        <DISchema name="Q_RUN_ERR">
+          <DIElement name="RUN_ID" type="int">
+            <DIAttribute name="ui_mapping_text" value="JOB_RUN_LOG.RUN_ID" />
+          </DIElement>
+          <DIElement name="END_TS" type="datetime">
+            <DIAttribute name="ui_mapping_text" value="sysdate()" />
+          </DIElement>
+          <DIElement name="STATUS" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="'FAILED'" />
+          </DIElement>
+          <DIElement name="ERROR_TEXT" type="varchar(255)">
+            <DIAttribute name="ui_mapping_text" value="$G_ERROR_TEXT" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="JOB_RUN_LOG.JOB_NAME = $G_JOB_NAME AND JOB_RUN_LOG.STATUS = 'RUNNING'" />
+      </DIQuery>
+      <DIMapOperation name="MO_RUN_ERR" mapNormalTo="UPDATE">
+        <DIInputView name="Q_RUN_ERR" />
+      </DIMapOperation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="CTL" tableName="JOB_RUN_LOG" loadMode="append">
+        <DIInputView name="MO_RUN_ERR" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_FX_RATES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="TCURR" />
+      <DIQuery name="Q_FX">
+        <DIInputView name="TCURR" />
+        <DISchema name="Q_FX">
+          <DIElement name="RATE_TYPE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="TCURR.KURST" />
+          </DIElement>
+          <DIElement name="FROM_CCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="TCURR.FCURR" />
+          </DIElement>
+          <DIElement name="TO_CCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="TCURR.TCURR" />
+          </DIElement>
+          <DIElement name="VALID_FROM" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(to_char(99999999 - TCURR.GDATU), 'YYYYMMDD')" />
+          </DIElement>
+          <DIElement name="RATE" type="decimal(9,5)">
+            <DIAttribute name="ui_mapping_text" value="TCURR.UKURS" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="TCURR.KURST = 'M'" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_FX_RATES" loadMode="truncate">
+        <DIInputView name="Q_FX" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_SUPPLIER">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_SUPPLIER" />
+      <DIQuery name="Q_SUPP">
+        <DIInputView name="STG_SUPPLIER" />
+        <DISchema name="Q_SUPP">
+          <DIElement name="SUPPLIER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_SUPPLIER.SUPPLIER_ID" />
+          </DIElement>
+          <DIElement name="SUPPLIER_NAME" type="varchar(35)">
+            <DIAttribute name="ui_mapping_text" value="STG_SUPPLIER.SUPPLIER_NAME" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="STG_SUPPLIER.COUNTRY" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_SUPP" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_SUPPLIER" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_SUPP" />
+      </DITableComparison>
+      <DIKeyGeneration name="KG_SUPP" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_SUPPLIER" keyColumn="SUPPLIER_KEY">
+        <DIInputView name="TC_SUPP" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_SUPPLIER" loadMode="append">
+        <DIInputView name="KG_SUPP" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

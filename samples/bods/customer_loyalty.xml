@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Customer master, loyalty and web shop
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIJob name="JOB_CUSTOMER_SYNC" description="Nightly customer master sync">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_CUSTOMER_SYNC" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_LOYALTY_POINTS" description="Loyalty members and points balances">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_POINTS_RATE" dataType="decimal(5,2)" scope="global" defaultValue="1.0" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_LOYALTY_MAIN" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_ECOM_ORDERS" description="Web shop orders from nightly files">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_ERROR_TEXT" dataType="varchar(255)" scope="global" />
+    <DIVariable name="$G_SCORE_ENABLED" dataType="varchar(1)" scope="global" defaultValue="N" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_ECOM_ORDERS" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIJob>
+  <DIWorkflow name="WF_CUSTOMER_SYNC">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_DIM_CUSTOMER_SCD" />
+      <DICallStep calledObjectType="Dataflow" name="DF_CUSTOMER_ADDRESS_CLEANSE" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LOYALTY_MAIN">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_LOYALTY_STAGE" />
+      <DICallStep calledObjectType="Workflow" name="WF_LOYALTY_MART" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LOYALTY_STAGE">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_LOYALTY_MEMBERS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_LOYALTY_TXN" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_LOYALTY_MART">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_LOYALTY_MEMBER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_LOYALTY_POINTS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_AGG_POINTS_BALANCE" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_ECOM_ORDERS">
+    <DIParameter name="$P_SOURCE_DIR" dataType="varchar(255)" defaultValue="/data/inbound/ecom" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_LOAD_FX_RATES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_ECOM_ORDERS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_ECOM_ORDER_LINES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_ECOM_SALES" />
+      <DIIf condition="$G_SCORE_ENABLED = 'Y'">
+        <DIThen>
+          <DICallStep calledObjectType="Dataflow" name="DF_ECOM_SCORE" />
+        </DIThen>
+      </DIIf>
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_CUSTOMER_ADDRESS_CLEANSE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_CUSTOMER" />
+      <DIQuery name="Q_ADDR">
+        <DIInputView name="STG_CUSTOMER" />
+        <DISchema name="Q_ADDR">
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_CUSTOMER.CUSTOMER_ID" />
+          </DIElement>
+          <DIElement name="POSTCODE" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="upper(replace_substr(STG_CUSTOMER.POSTCODE, ' ', ''))" />
+          </DIElement>
+          <DIElement name="CITY" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="initcap(STG_CUSTOMER.CITY)" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="STG_CUSTOMER.COUNTRY" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIValidation name="VAL_ADDRESS" rule="Q_ADDR.POSTCODE IS NOT NULL AND length(Q_ADDR.POSTCODE) &gt;= 4">
+        <DIInputView name="Q_ADDR" />
+      </DIValidation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="CUSTOMER_ADDRESS" loadMode="truncate">
+        <DIInputView name="VAL_ADDRESS" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_LOYALTY_MEMBERS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_CRM" ownerName="LOYALTY" tableName="MEMBERS" />
+      <DIQuery name="Q_MEMBERS_STG">
+        <DIInputView name="MEMBERS" />
+        <DISchema name="Q_MEMBERS_STG">
+          <DIElement name="MEMBER_ID" type="varchar(12)">
+            <DIAttribute name="ui_mapping_text" value="MEMBERS.MEMBER_ID" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="MEMBERS.ERP_CUSTOMER" />
+          </DIElement>
+          <DIElement name="TIER" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="upper(MEMBERS.TIER)" />
+          </DIElement>
+          <DIElement name="JOIN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="MEMBERS.JOINED_ON" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_LOYALTY_MEMBER" loadMode="truncate">
+        <DIInputView name="Q_MEMBERS_STG" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_LOYALTY_TXN">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_CRM" ownerName="LOYALTY" tableName="POINT_TXN" />
+      <DIQuery name="Q_PTS_STG">
+        <DIInputView name="POINT_TXN" />
+        <DISchema name="Q_PTS_STG">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="POINT_TXN.TXN_ID" />
+          </DIElement>
+          <DIElement name="MEMBER_ID" type="varchar(12)">
+            <DIAttribute name="ui_mapping_text" value="POINT_TXN.MEMBER_ID" />
+          </DIElement>
+          <DIElement name="TXN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="POINT_TXN.TXN_DATE" />
+          </DIElement>
+          <DIElement name="POINTS" type="int">
+            <DIAttribute name="ui_mapping_text" value="POINT_TXN.POINTS" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="POINT_TXN.TXN_DATE &gt;= $G_LOAD_DATE - 1" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_LOYALTY_TXN" loadMode="append">
+        <DIInputView name="Q_PTS_STG" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_LOYALTY_MEMBER" description="Loyalty member dimension, SCD type 2 on tier">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_LOYALTY_MEMBER" />
+      <DIQuery name="Q_MEMBER">
+        <DIInputView name="STG_LOYALTY_MEMBER" />
+        <DISchema name="Q_MEMBER">
+          <DIElement name="MEMBER_ID" type="varchar(12)">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_MEMBER.MEMBER_ID" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_MEMBER.CUSTOMER_ID" />
+          </DIElement>
+          <DIElement name="TIER" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_MEMBER.TIER" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_MEMBER" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_LOYALTY_MEMBER" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_MEMBER" />
+      </DITableComparison>
+      <DIHistoryPreserving name="HP_MEMBER" validFromColumn="VALID_FROM" validToColumn="VALID_TO">
+        <DIInputView name="TC_MEMBER" />
+      </DIHistoryPreserving>
+      <DIKeyGeneration name="KG_MEMBER" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_LOYALTY_MEMBER" keyColumn="MEMBER_KEY">
+        <DIInputView name="HP_MEMBER" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_LOYALTY_MEMBER" loadMode="append">
+        <DIInputView name="KG_MEMBER" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_LOYALTY_POINTS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_LOYALTY_TXN" />
+      <DIQuery name="Q_TXN">
+        <DIInputView name="STG_LOYALTY_TXN" />
+        <DISchema name="Q_TXN">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_TXN.TXN_ID" />
+          </DIElement>
+          <DIElement name="MEMBER_ID" type="varchar(12)">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_TXN.MEMBER_ID" />
+          </DIElement>
+          <DIElement name="TXN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_TXN.TXN_DATE" />
+          </DIElement>
+          <DIElement name="POINTS" type="int">
+            <DIAttribute name="ui_mapping_text" value="STG_LOYALTY_TXN.POINTS * $G_POINTS_RATE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DILookup name="LKP_MEMBER_KEY" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_LOYALTY_MEMBER" cachePolicy="PRE_LOAD_CACHE">
+        <DIInputView name="Q_TXN" />
+        <DILookupCondition lookupColumn="MEMBER_ID" inputExpr="Q_TXN.MEMBER_ID" />
+        <DILookupReturn column="MEMBER_KEY" />
+      </DILookup>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_LOYALTY_POINTS" loadMode="append">
+        <DIInputView name="LKP_MEMBER_KEY" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_AGG_POINTS_BALANCE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_LOYALTY_POINTS" />
+      <DIQuery name="Q_BAL">
+        <DIInputView name="FACT_LOYALTY_POINTS" />
+        <DISchema name="Q_BAL">
+          <DIElement name="MEMBER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_LOYALTY_POINTS.MEMBER_KEY" />
+          </DIElement>
+          <DIElement name="POINTS_BALANCE" type="int">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_LOYALTY_POINTS.POINTS)" />
+          </DIElement>
+          <DIElement name="LAST_TXN_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="max(FACT_LOYALTY_POINTS.TXN_DATE)" />
+          </DIElement>
+        </DISchema>
+        <DIGroupBy>
+          <DIExpression expr="FACT_LOYALTY_POINTS.MEMBER_KEY" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="FACT_LOYALTY_POINTS.MEMBER_KEY" sortType="ASC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="AGG_POINTS_BALANCE" loadMode="truncate">
+        <DIInputView name="Q_BAL" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_ECOM_ORDERS">
+    <DITransforms>
+      <DIFileSource name="FF_ECOM_ORDERS" fileFormat="FMT_ECOM_ORDERS_CSV" fileName="[$P_SOURCE_DIR]/orders_[$G_LOAD_DATE].csv" />
+      <DIQuery name="Q_ECOM_HDR">
+        <DIInputView name="FF_ECOM_ORDERS" />
+        <DISchema name="Q_ECOM_HDR">
+          <DIElement name="WEB_ORDER_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_ORDERS.ORDER_REF" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(FF_ECOM_ORDERS.CREATED, 'YYYY-MM-DD')" />
+          </DIElement>
+          <DIElement name="CUSTOMER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_ORDERS.CUSTOMER_NO" />
+          </DIElement>
+          <DIElement name="CURRENCY" type="varchar(5)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_ORDERS.CCY" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_ECOM_ORDERS" loadMode="truncate">
+        <DIInputView name="Q_ECOM_HDR" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_ECOM_ORDER_LINES">
+    <DITransforms>
+      <DIFileSource name="FF_ECOM_LINES" fileFormat="FMT_ECOM_LINES_CSV" fileName="[$P_SOURCE_DIR]/order_lines_[$G_LOAD_DATE].csv" />
+      <DIQuery name="Q_ECOM_LINES">
+        <DIInputView name="FF_ECOM_LINES" />
+        <DISchema name="Q_ECOM_LINES">
+          <DIElement name="WEB_ORDER_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_LINES.ORDER_REF" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_LINES.LINE" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_LINES.SKU" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_LINES.QTY" />
+          </DIElement>
+          <DIElement name="AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FF_ECOM_LINES.PRICE * FF_ECOM_LINES.QTY" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_ECOM_ORDER_LINES" loadMode="truncate">
+        <DIInputView name="Q_ECOM_LINES" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_ECOM_SALES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_ECOM_ORDERS" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_ECOM_ORDER_LINES" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_FX_RATES" />
+      <DIQuery name="Q_ECOM">
+        <DIInputView name="STG_ECOM_ORDERS" />
+        <DIInputView name="STG_ECOM_ORDER_LINES" />
+        <DIInputView name="STG_FX_RATES" />
+        <DISchema name="Q_ECOM">
+          <DIElement name="WEB_ORDER_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_ECOM_ORDERS.WEB_ORDER_ID" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="STG_ECOM_ORDER_LINES.LINE_NO" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="STG_ECOM_ORDERS.ORDER_DATE" />
+          </DIElement>
+          <DIElement name="CUSTOMER_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_CUSTOMER,'PRE_LOAD_CACHE','MAX'],[CUSTOMER_KEY],[-1],[CUSTOMER_ID,'=',STG_ECOM_ORDERS.CUSTOMER_ID])" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_KEY],[-1],[PRODUCT_ID,'=',STG_ECOM_ORDER_LINES.PRODUCT_ID])" />
+          </DIElement>
+          <DIElement name="AMOUNT_EUR" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_ECOM_ORDER_LINES.AMOUNT * nvl(STG_FX_RATES.RATE, 1)" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="STG_ECOM_ORDERS" rightSchema="STG_ECOM_ORDER_LINES" joinType="INNER" expr="STG_ECOM_ORDERS.WEB_ORDER_ID = STG_ECOM_ORDER_LINES.WEB_ORDER_ID" />
+          <DIJoinPair leftSchema="STG_ECOM_ORDERS" rightSchema="STG_FX_RATES" joinType="LEFT OUTER" expr="STG_ECOM_ORDERS.CURRENCY = STG_FX_RATES.FROM_CCY AND STG_FX_RATES.TO_CCY = 'EUR'" />
+        </DIJoins>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_ECOM_SALES" loadMode="append">
+        <DIInputView name="Q_ECOM" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_ECOM_SCORE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_ECOM_SALES" />
+      <DICustomPythonTransform name="PY_BASKET_SCORE" scriptName="basket_score.py">
+        <DIInputView name="FACT_ECOM_SALES" />
+      </DICustomPythonTransform>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="ECOM_BASKET_SCORE" loadMode="truncate">
+        <DIInputView name="PY_BASKET_SCORE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

@@ -1,0 +1,419 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Inventory, replenishment and warehouse moves
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIJob name="JOB_INVENTORY_DAILY" description="Daily stock snapshot">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_INVENTORY_MAIN" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_REPLENISHMENT" description="Reorder proposals for suppliers">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_RUN_REPLENISH" dataType="varchar(1)" scope="global" defaultValue="Y" />
+    <DISteps>
+      <DIIf condition="$G_RUN_REPLENISH = 'Y'">
+        <DIThen>
+          <DICallStep calledObjectType="Workflow" name="WF_REPLENISHMENT" />
+        </DIThen>
+      </DIIf>
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_WAREHOUSE_MOVES" description="Warehouse stock movements from the WMS feed">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DIVariable name="$G_ERROR_TEXT" dataType="varchar(255)" scope="global" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_WAREHOUSE_MOVES" />
+    </DISteps>
+  </DIJob>
+  <DIWorkflow name="WF_INVENTORY_MAIN">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_START" />
+      <DICallStep calledObjectType="Workflow" name="WF_STAGE_INVENTORY" />
+      <DICallStep calledObjectType="Workflow" name="WF_INVENTORY_MART" />
+      <DICallStep calledObjectType="Workflow" name="WF_JOB_END" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_STAGE_INVENTORY">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_STOCK_LEVELS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_WAREHOUSES" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_PRODUCT" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_INVENTORY_MART">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_PRODUCT" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_WAREHOUSE" />
+      <DICallStep calledObjectType="Dataflow" name="DF_FACT_STOCK_DAILY" />
+      <DICallStep calledObjectType="Dataflow" name="DF_AGG_STOCK_BY_STORE" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_REPLENISHMENT">
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_SUPPLIER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_SUPPLIER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_CALC_REORDER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_REORDER_PIVOT" />
+      <DICallStep calledObjectType="Dataflow" name="DF_OUT_PURCHASE_PROPOSALS" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_WAREHOUSE_MOVES">
+    <DISteps>
+      <DITryCatch name="TRY_MOVES">
+        <DITry>
+          <DICallStep calledObjectType="Dataflow" name="DF_STG_WMS_MOVES" />
+          <DICallStep calledObjectType="Dataflow" name="DF_FACT_STOCK_MOVES" />
+        </DITry>
+        <DICatch exceptionGroup="ALL">
+          <DIScript>$G_ERROR_TEXT = error_message();</DIScript>
+          <DICallStep calledObjectType="Dataflow" name="DF_CTL_JOB_ERROR" />
+        </DICatch>
+      </DITryCatch>
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_STG_STOCK_LEVELS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="MARD" />
+      <DIQuery name="Q_STOCK_LVL">
+        <DIInputView name="MARD" />
+        <DISchema name="Q_STOCK_LVL">
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="MARD.MATNR" />
+          </DIElement>
+          <DIElement name="STORE_CODE" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="MARD.WERKS" />
+          </DIElement>
+          <DIElement name="STORAGE_LOC" type="varchar(4)">
+            <DIAttribute name="ui_mapping_text" value="MARD.LGORT" />
+          </DIElement>
+          <DIElement name="QTY_ON_HAND" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="MARD.LABST" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="MARD.LABST &lt;&gt; 0" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_STOCK" loadMode="truncate">
+        <DIInputView name="Q_STOCK_LVL" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_WAREHOUSES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_WMS" ownerName="WMS" tableName="WAREHOUSE" />
+      <DIQuery name="Q_WH_STG">
+        <DIInputView name="WAREHOUSE" />
+        <DISchema name="Q_WH_STG">
+          <DIElement name="WAREHOUSE_ID" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="WAREHOUSE.WH_ID" />
+          </DIElement>
+          <DIElement name="WAREHOUSE_NAME" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="WAREHOUSE.WH_NAME" />
+          </DIElement>
+          <DIElement name="CAPACITY_M3" type="decimal(12,2)">
+            <DIAttribute name="ui_mapping_text" value="WAREHOUSE.CAPACITY_M3" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_WAREHOUSE" loadMode="truncate">
+        <DIInputView name="Q_WH_STG" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_DIM_WAREHOUSE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_WAREHOUSE" />
+      <DIQuery name="Q_WH">
+        <DIInputView name="STG_WAREHOUSE" />
+        <DISchema name="Q_WH">
+          <DIElement name="WAREHOUSE_ID" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="STG_WAREHOUSE.WAREHOUSE_ID" />
+          </DIElement>
+          <DIElement name="WAREHOUSE_NAME" type="varchar(40)">
+            <DIAttribute name="ui_mapping_text" value="STG_WAREHOUSE.WAREHOUSE_NAME" />
+          </DIElement>
+          <DIElement name="CAPACITY_M3" type="decimal(12,2)">
+            <DIAttribute name="ui_mapping_text" value="STG_WAREHOUSE.CAPACITY_M3" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_WH" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_WAREHOUSE" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_WH" />
+      </DITableComparison>
+      <DIKeyGeneration name="KG_WH" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_WAREHOUSE" keyColumn="WAREHOUSE_KEY">
+        <DIInputView name="TC_WH" />
+      </DIKeyGeneration>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_WAREHOUSE" loadMode="append">
+        <DIInputView name="KG_WH" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_STOCK_DAILY">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_STOCK" />
+      <DIQuery name="Q_STOCK">
+        <DIInputView name="STG_STOCK" />
+        <DISchema name="Q_STOCK">
+          <DIElement name="SNAPSHOT_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="$G_LOAD_DATE" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_KEY],[-1],[PRODUCT_ID,'=',STG_STOCK.PRODUCT_ID])" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, STG_STOCK.STORE_CODE)" />
+          </DIElement>
+          <DIElement name="QTY_ON_HAND" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="STG_STOCK.QTY_ON_HAND" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_DAILY" loadMode="append">
+        <DIInputView name="Q_STOCK" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_AGG_STOCK_BY_STORE">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_DAILY" />
+      <DIQuery name="Q_STOCK_STORE">
+        <DIInputView name="FACT_STOCK_DAILY" />
+        <DISchema name="Q_STOCK_STORE">
+          <DIElement name="SNAPSHOT_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="FACT_STOCK_DAILY.SNAPSHOT_DATE" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_STOCK_DAILY.STORE_KEY" />
+          </DIElement>
+          <DIElement name="TOTAL_QTY" type="decimal(15,3)">
+            <DIAttribute name="ui_mapping_text" value="sum(FACT_STOCK_DAILY.QTY_ON_HAND)" />
+          </DIElement>
+          <DIElement name="SKU_COUNT" type="int">
+            <DIAttribute name="ui_mapping_text" value="count(FACT_STOCK_DAILY.PRODUCT_KEY)" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="FACT_STOCK_DAILY.SNAPSHOT_DATE = $G_LOAD_DATE" />
+        <DIGroupBy>
+          <DIExpression expr="FACT_STOCK_DAILY.SNAPSHOT_DATE" />
+          <DIExpression expr="FACT_STOCK_DAILY.STORE_KEY" />
+        </DIGroupBy>
+        <DIOrderBy>
+          <DIExpression expr="sum(FACT_STOCK_DAILY.QTY_ON_HAND)" sortType="DESC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="AGG_STOCK_BY_STORE" loadMode="append">
+        <DIInputView name="Q_STOCK_STORE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_SUPPLIER">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_ERP" ownerName="SAPSR3" tableName="LFA1" />
+      <DIQuery name="Q_SUPPLIER">
+        <DIInputView name="LFA1" />
+        <DISchema name="Q_SUPPLIER">
+          <DIElement name="SUPPLIER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="LFA1.LIFNR" />
+          </DIElement>
+          <DIElement name="SUPPLIER_NAME" type="varchar(35)">
+            <DIAttribute name="ui_mapping_text" value="LFA1.NAME1" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="LFA1.LAND1" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_SUPPLIER" loadMode="truncate">
+        <DIInputView name="Q_SUPPLIER" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CALC_REORDER" description="Classify stock shortfalls by urgency">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_DAILY" />
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="REORDER_RULES" />
+      <DIQuery name="Q_NEED">
+        <DIInputView name="FACT_STOCK_DAILY" />
+        <DIInputView name="REORDER_RULES" />
+        <DISchema name="Q_NEED">
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_STOCK_DAILY.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_STOCK_DAILY.STORE_KEY" />
+          </DIElement>
+          <DIElement name="QTY_ON_HAND" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="FACT_STOCK_DAILY.QTY_ON_HAND" />
+          </DIElement>
+          <DIElement name="SHORTFALL" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="REORDER_RULES.REORDER_POINT - FACT_STOCK_DAILY.QTY_ON_HAND" />
+          </DIElement>
+          <DIElement name="ORDER_QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="REORDER_RULES.ORDER_MULTIPLE * ceil((REORDER_RULES.REORDER_POINT - FACT_STOCK_DAILY.QTY_ON_HAND) / REORDER_RULES.ORDER_MULTIPLE)" />
+          </DIElement>
+        </DISchema>
+        <DIJoins>
+          <DIJoinPair leftSchema="FACT_STOCK_DAILY" rightSchema="REORDER_RULES" joinType="INNER" expr="FACT_STOCK_DAILY.PRODUCT_KEY = REORDER_RULES.PRODUCT_KEY AND FACT_STOCK_DAILY.STORE_KEY = REORDER_RULES.STORE_KEY" />
+        </DIJoins>
+        <DIWhereClause expr="FACT_STOCK_DAILY.SNAPSHOT_DATE = $G_LOAD_DATE" />
+      </DIQuery>
+      <DICase name="CASE_URGENCY">
+        <DIInputView name="Q_NEED" />
+        <DICaseBranch name="URG_CRITICAL" expr="Q_NEED.QTY_ON_HAND = 0" />
+        <DICaseBranch name="URG_LOW" expr="Q_NEED.SHORTFALL &gt; 0" />
+        <DICaseBranch name="URG_OK" isDefault="true" />
+      </DICase>
+      <DIQuery name="Q_CRIT">
+        <DIInputView name="URG_CRITICAL" />
+        <DISchema name="Q_CRIT">
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="URG_CRITICAL.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="URG_CRITICAL.STORE_KEY" />
+          </DIElement>
+          <DIElement name="ORDER_QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="URG_CRITICAL.ORDER_QTY" />
+          </DIElement>
+          <DIElement name="PRIORITY" type="int">
+            <DIAttribute name="ui_mapping_text" value="1" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIQuery name="Q_LOW">
+        <DIInputView name="URG_LOW" />
+        <DISchema name="Q_LOW">
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="URG_LOW.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="URG_LOW.STORE_KEY" />
+          </DIElement>
+          <DIElement name="ORDER_QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="URG_LOW.ORDER_QTY" />
+          </DIElement>
+          <DIElement name="PRIORITY" type="int">
+            <DIAttribute name="ui_mapping_text" value="2" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIMerge name="MRG_REORDER">
+        <DIInputView name="Q_CRIT" />
+        <DIInputView name="Q_LOW" />
+      </DIMerge>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="REORDER_PROPOSALS" loadMode="truncate">
+        <DIInputView name="MRG_REORDER" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_REORDER_PIVOT">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="REORDER_PROPOSALS" />
+      <DIPivot name="PIV_BY_STORE" pivotColumn="STORE_KEY" dataColumn="ORDER_QTY">
+        <DIInputView name="REORDER_PROPOSALS" />
+      </DIPivot>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="REORDER_MATRIX" loadMode="truncate">
+        <DIInputView name="PIV_BY_STORE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_OUT_PURCHASE_PROPOSALS">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="REORDER_PROPOSALS" />
+      <DIQuery name="Q_PO_OUT">
+        <DIInputView name="REORDER_PROPOSALS" />
+        <DISchema name="Q_PO_OUT">
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="REORDER_PROPOSALS.PRODUCT_KEY" />
+          </DIElement>
+          <DIElement name="STORE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="REORDER_PROPOSALS.STORE_KEY" />
+          </DIElement>
+          <DIElement name="ORDER_QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="REORDER_PROPOSALS.ORDER_QTY" />
+          </DIElement>
+          <DIElement name="PRIORITY" type="int">
+            <DIAttribute name="ui_mapping_text" value="REORDER_PROPOSALS.PRIORITY" />
+          </DIElement>
+        </DISchema>
+        <DIOrderBy>
+          <DIExpression expr="REORDER_PROPOSALS.PRIORITY" sortType="ASC" />
+          <DIExpression expr="REORDER_PROPOSALS.ORDER_QTY" sortType="DESC" />
+        </DIOrderBy>
+      </DIQuery>
+      <DIFileTarget name="FF_PURCHASE_PROPOSALS" fileFormat="FMT_PO_CSV" fileName="po_proposals_[$G_LOAD_DATE].csv">
+        <DIInputView name="Q_PO_OUT" />
+      </DIFileTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_STG_WMS_MOVES">
+    <DITransforms>
+      <DIFileSource name="FF_WMS_MOVES" fileFormat="FMT_WMS_XML" fileName="wms_moves_[$G_LOAD_DATE].xml" />
+      <DIXMLPipeline name="XP_MOVES" repeatingElement="Move">
+        <DIInputView name="FF_WMS_MOVES" />
+      </DIXMLPipeline>
+      <DIQuery name="Q_MOVES">
+        <DIInputView name="XP_MOVES" />
+        <DISchema name="Q_MOVES">
+          <DIElement name="MOVE_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="XP_MOVES.MOVE_ID" />
+          </DIElement>
+          <DIElement name="PRODUCT_ID" type="varchar(18)">
+            <DIAttribute name="ui_mapping_text" value="XP_MOVES.SKU" />
+          </DIElement>
+          <DIElement name="WAREHOUSE_ID" type="varchar(6)">
+            <DIAttribute name="ui_mapping_text" value="XP_MOVES.WH" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="XP_MOVES.QTY" />
+          </DIElement>
+          <DIElement name="MOVE_TYPE" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="XP_MOVES.TYPE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_STOCK_MOVES" loadMode="truncate">
+        <DIInputView name="Q_MOVES" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_FACT_STOCK_MOVES">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_STOCK_MOVES" />
+      <DIQuery name="Q_MV">
+        <DIInputView name="STG_STOCK_MOVES" />
+        <DISchema name="Q_MV">
+          <DIElement name="MOVE_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_STOCK_MOVES.MOVE_ID" />
+          </DIElement>
+          <DIElement name="PRODUCT_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_PRODUCT,'PRE_LOAD_CACHE','MAX'],[PRODUCT_KEY],[-1],[PRODUCT_ID,'=',STG_STOCK_MOVES.PRODUCT_ID])" />
+          </DIElement>
+          <DIElement name="WAREHOUSE_KEY" type="int">
+            <DIAttribute name="ui_mapping_text" value="lookup_ext([DS_DWH.MART.DIM_WAREHOUSE,'PRE_LOAD_CACHE','MAX'],[WAREHOUSE_KEY],[-1],[WAREHOUSE_ID,'=',STG_STOCK_MOVES.WAREHOUSE_ID])" />
+          </DIElement>
+          <DIElement name="QTY" type="decimal(13,3)">
+            <DIAttribute name="ui_mapping_text" value="STG_STOCK_MOVES.QTY" />
+          </DIElement>
+          <DIElement name="MOVE_TYPE" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="STG_STOCK_MOVES.MOVE_TYPE" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_MOVES" datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_MOVES" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_MV" />
+      </DITableComparison>
+      <DIMapOperation name="MO_MOVES" mapDeleteTo="DISCARD">
+        <DIInputView name="TC_MOVES" />
+      </DIMapOperation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_MOVES" loadMode="append">
+        <DIInputView name="MO_MOVES" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>

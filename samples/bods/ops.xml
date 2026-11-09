@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SYNTHETIC sample for development only. Fernhill Retail is a fictional company.
+  Structure approximates a BODS XML export; tag names are unverified against real exports.
+  Area: Master data refresh and housekeeping
+-->
+<DataIntegratorExport productVersion="14.3.x-synthetic">
+  <DIJob name="JOB_MASTER_DATA_WEEKLY" description="Weekly refresh of all master data">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_JOB_NAME" dataType="varchar(64)" scope="global" />
+    <DISteps>
+      <DIScript>$G_LOAD_DATE = sysdate();</DIScript>
+      <DICallStep calledObjectType="Workflow" name="WF_MASTER_DATA" />
+    </DISteps>
+  </DIJob>
+  <DIJob name="JOB_DWH_HOUSEKEEPING" description="Purge staging and archive old fact partitions">
+    <DIVariable name="$G_LOAD_DATE" dataType="date" scope="global" />
+    <DIVariable name="$G_RETENTION_DAYS" dataType="int" scope="global" defaultValue="400" />
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_HOUSEKEEPING" />
+    </DISteps>
+  </DIJob>
+  <DIWorkflow name="WF_MASTER_DATA">
+    <DISteps>
+      <DICallStep calledObjectType="Workflow" name="WF_SHARED_DIMENSIONS" />
+      <DICallStep calledObjectType="Dataflow" name="DF_STG_SUPPLIER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_SUPPLIER" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_WAREHOUSE" />
+      <DICallStep calledObjectType="Dataflow" name="DF_DIM_CALENDAR_HOLIDAYS" />
+    </DISteps>
+  </DIWorkflow>
+  <DIWorkflow name="WF_HOUSEKEEPING">
+    <DIVariable name="$L_PARTITION" dataType="int" scope="local" defaultValue="0" />
+    <DIVariable name="$L_PARTITION_COUNT" dataType="int" scope="local" defaultValue="12" />
+    <DISteps>
+      <DICallStep calledObjectType="Dataflow" name="DF_CTL_PURGE_STAGING" />
+      <DIWhileStep condition="$L_PARTITION &lt; $L_PARTITION_COUNT">
+        <DISteps>
+          <DICallStep calledObjectType="Dataflow" name="DF_CTL_ARCHIVE_PARTITION" />
+          <DIScript>$L_PARTITION = $L_PARTITION + 1;</DIScript>
+        </DISteps>
+      </DIWhileStep>
+      <DICallStep calledObjectType="Workflow" name="WF_PURGE_AUDIT_LOG" />
+    </DISteps>
+  </DIWorkflow>
+  <DIDataflow name="DF_DIM_CALENDAR_HOLIDAYS">
+    <DITransforms>
+      <DIFileSource name="FF_HOLIDAYS" fileFormat="FMT_HOLIDAY_CSV" fileName="public_holidays.csv" />
+      <DIQuery name="Q_HOL">
+        <DIInputView name="FF_HOLIDAYS" />
+        <DISchema name="Q_HOL">
+          <DIElement name="HOLIDAY_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="to_date(FF_HOLIDAYS.DATE_STR, 'YYYY-MM-DD')" />
+          </DIElement>
+          <DIElement name="COUNTRY" type="varchar(3)">
+            <DIAttribute name="ui_mapping_text" value="FF_HOLIDAYS.COUNTRY" />
+          </DIElement>
+          <DIElement name="HOLIDAY_NAME" type="varchar(60)">
+            <DIAttribute name="ui_mapping_text" value="FF_HOLIDAYS.NAME" />
+          </DIElement>
+        </DISchema>
+      </DIQuery>
+      <DITableComparison name="TC_HOL" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_HOLIDAY" comparisonMethod="ROW_BY_ROW_SELECT">
+        <DIInputView name="Q_HOL" />
+      </DITableComparison>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_HOLIDAY" loadMode="append">
+        <DIInputView name="TC_HOL" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CTL_PURGE_STAGING">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="STG" tableName="STG_POS_TXN" />
+      <DIQuery name="Q_OLD_TXN">
+        <DIInputView name="STG_POS_TXN" />
+        <DISchema name="Q_OLD_TXN">
+          <DIElement name="TXN_ID" type="varchar(20)">
+            <DIAttribute name="ui_mapping_text" value="STG_POS_TXN.TXN_ID" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="STG_POS_TXN.TXN_TS &lt; $G_LOAD_DATE - $G_RETENTION_DAYS" />
+      </DIQuery>
+      <DIMapOperation name="MO_DELETE" mapNormalTo="DELETE">
+        <DIInputView name="Q_OLD_TXN" />
+      </DIMapOperation>
+      <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="STG" tableName="STG_POS_TXN" loadMode="append">
+        <DIInputView name="MO_DELETE" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+  <DIDataflow name="DF_CTL_ARCHIVE_PARTITION">
+    <DITransforms>
+      <DIDatabaseTableSource datastoreName="DS_DWH" ownerName="MART" tableName="FACT_SALES" />
+      <DIQuery name="Q_ARCH">
+        <DIInputView name="FACT_SALES" />
+        <DISchema name="Q_ARCH">
+          <DIElement name="ORDER_ID" type="varchar(10)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.ORDER_ID" />
+          </DIElement>
+          <DIElement name="LINE_NO" type="int">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.LINE_NO" />
+          </DIElement>
+          <DIElement name="ORDER_DATE" type="date">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.ORDER_DATE" />
+          </DIElement>
+          <DIElement name="LINE_AMOUNT" type="decimal(15,2)">
+            <DIAttribute name="ui_mapping_text" value="FACT_SALES.LINE_AMOUNT" />
+          </DIElement>
+        </DISchema>
+        <DIWhereClause expr="FACT_SALES.ORDER_DATE &lt; $G_LOAD_DATE - $G_RETENTION_DAYS" />
+      </DIQuery>
+      <DIDatabaseTableTarget datastoreName="DS_ARCHIVE" ownerName="ARCH" tableName="FACT_SALES_ARCHIVE" loadMode="append">
+        <DIInputView name="Q_ARCH" />
+      </DIDatabaseTableTarget>
+    </DITransforms>
+  </DIDataflow>
+</DataIntegratorExport>
