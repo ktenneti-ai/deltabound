@@ -284,3 +284,24 @@ def test_ir_0_2_0_json_still_loads():
     assert e.ir_version == "0.2.0"
     t = e.objects["DF_FACT_SALES"].transforms[0]
     assert t.key_columns == [] and t.history is None and t.generated_key is None
+
+
+def test_transform_names_are_unique_within_each_dataflow():
+    for o in _estate().objects.values():
+        names = [t.name for t in o.transforms]
+        assert len(names) == len(set(names)), o.name
+    purge = [(t.name, t.kind) for t in _estate().objects["DF_CTL_PURGE_STAGING"].transforms]
+    assert ("STG_POS_TXN", "table_source") in purge and ("STG_POS_TXN_TARGET", "table_target") in purge
+
+
+def test_script_positions():
+    o = _estate().objects
+    main = o["WF_SALES_DAILY_MAIN"].script_steps
+    assert [(s.index, s.after_call, s.control) for s in main] == [(0, 3, "error_handler"), (1, 4, "error_handler")]
+    assert [(s.after_call, s.control) for s in o["WF_JOB_END"].script_steps] == [(1, None)]
+    fx = o["WF_LOAD_FX_RATES"].script_steps
+    assert [(s.after_call, s.control) for s in fx] == [(1, "loop"), (1, "error_handler"), (2, "branch")]
+    assert fx[2].condition == "$L_DONE = 'N'"
+    assert all(len(x.scripts) == len(x.script_steps) for x in o.values())
+    # Call numbering is unchanged by scripts.
+    assert [c.order for c in o["WF_SALES_DAILY_MAIN"].calls] == [1, 2, 3, 4, 5]

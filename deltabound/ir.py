@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field
 # 0.2.0: adds Transform.joins/group_by/order_by/branches/lookups/options and
 # CallStep.control. All new fields have defaults, so 0.1.0 JSON still loads.
 # 0.2.1: adds LookupRef.default_values/policy/cache and Transform.key_columns/
-# compare_columns/history/generated_key (needed by convert/). Additive only.
+# compare_columns/history/generated_key and EtlObject.script_steps (needed by
+# convert/). Additive only.
 IR_VERSION = "0.2.1"
 
 
@@ -126,6 +127,15 @@ class Transform(BaseModel):
     raw_tag: Optional[str] = None  # original element name, kept for opaque nodes
 
 
+class ScriptStep(BaseModel):
+    """Where a script sits in its object's flow (EtlObject.scripts keeps the texts)."""
+
+    index: int  # position in EtlObject.scripts (0-based)
+    after_call: int = 0  # CallStep.order of the call it follows; 0 = before the first call
+    condition: Optional[str] = None
+    control: Optional[str] = None  # same meaning as CallStep.control
+
+
 class EtlObject(BaseModel):
     name: str
     kind: ObjectKind
@@ -134,6 +144,7 @@ class EtlObject(BaseModel):
     calls: list[CallStep] = Field(default_factory=list)
     transforms: list[Transform] = Field(default_factory=list)
     scripts: list[str] = Field(default_factory=list)
+    script_steps: list[ScriptStep] = Field(default_factory=list)  # empty in IR < 0.2.1: position unknown
 
 
 class Estate(BaseModel):

@@ -25,6 +25,7 @@ from ..ir import (
     Join,
     LookupRef,
     ObjectKind,
+    ScriptStep,
     SortKey,
     TableRef,
     Transform,
@@ -162,12 +163,18 @@ def _parse_object(el: ET.Element, kind: ObjectKind, estate: Estate) -> EtlObject
         elif v.tag == TAG_SCRIPT:
             obj.scripts.append((v.text or v.get("text") or "").strip())
 
-    for order, (call, condition, control) in enumerate(_walk_calls(el, None, None), 1):
+    order = 0
+    for step, condition, control in _walk_calls(el, None, None):
+        if step.tag == TAG_SCRIPT:
+            obj.script_steps.append(ScriptStep(index=len(obj.script_steps), after_call=order,
+                                               condition=condition, control=control))
+            continue
+        order += 1
         target_kind = {"Workflow": ObjectKind.WORKFLOW, "Dataflow": ObjectKind.DATAFLOW}.get(
-            call.get("calledObjectType", "")
+            step.get("calledObjectType", "")
         )
         obj.calls.append(
-            CallStep(target=call.get("name", "?"), target_kind=target_kind,
+            CallStep(target=step.get("name", "?"), target_kind=target_kind,
                      condition=condition, control=control, order=order)
         )
 
@@ -175,7 +182,30 @@ def _parse_object(el: ET.Element, kind: ObjectKind, estate: Estate) -> EtlObject
         container = el.find("DITransforms")
         for t in (container if container is not None else []):
             obj.transforms.append(_parse_transform(t, estate, obj.name))
+        _unique_names(obj)
     return obj
+
+
+TARGET_SUFFIX = "_TARGET"
+
+
+def _unique_names(df: EtlObject) -> None:
+    """Make transform names unique within a dataflow.
+
+    Unnamed sources and targets are named after their table, so a dataflow that
+    reads and writes the same table gets two transforms with one name. Targets
+    are never referenced as inputs, so a clashing target is renamed (TABLE_TARGET);
+    any other clash gets a numeric suffix. The table reference is unchanged.
+    """
+    seen: set[str] = set()
+    for t in df.transforms:
+        if t.name in seen:
+            base = t.name + (TARGET_SUFFIX if t.kind in ("table_target", "file_target") else "")
+            name, n = base, 2
+            while name in seen:
+                name, n = f"{base}_{n}", n + 1
+            t.name = name
+        seen.add(t.name)
 
 
 def _and(outer: Optional[str], inner: str) -> str:
@@ -185,9 +215,9 @@ def _and(outer: Optional[str], inner: str) -> str:
 def _walk_calls(
     el: ET.Element, condition: Optional[str], control: Optional[str]
 ) -> Iterator[tuple[ET.Element, Optional[str], Optional[str]]]:
-    """Yield (call element, enclosing condition, innermost control construct) in document order."""
+    """Yield (call or script element, enclosing condition, innermost control construct) in document order."""
     for child in el:
-        if child.tag == TAG_CALL:
+        if child.tag in (TAG_CALL, TAG_SCRIPT):
             yield child, condition, control
         elif child.tag == TAG_IF:
             cond = child.get("condition") or child.get("expr") or "?"

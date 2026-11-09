@@ -36,6 +36,21 @@ def tree_lines(estate: Estate, root: str) -> list[str]:
     return lines
 
 
+def reached_in_order(estate: Estate, root: str) -> list[str]:
+    """`root` and every object it calls, in first-call (depth-first) order; missing objects skipped."""
+    order: list[str] = []
+
+    def visit(name: str) -> None:
+        if name in order or name not in estate.objects:
+            return
+        order.append(name)
+        for c in sorted(estate.objects[name].calls, key=lambda c: c.order):
+            visit(c.target)
+
+    visit(root)
+    return order
+
+
 def call_tree(estate: Estate, root: str) -> dict:
     """Nested call tree of `root`: {name, kind, condition, control, order, calls: [...]}.
 

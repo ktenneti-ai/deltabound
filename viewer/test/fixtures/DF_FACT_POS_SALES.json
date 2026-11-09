@@ -4,6 +4,7 @@
   "description": "Split POS sales by channel, apply channel rules, merge back",
   "kind": "dataflow",
   "name": "DF_FACT_POS_SALES",
+  "script_steps": [],
   "scripts": [],
   "transforms": [
    {

@@ -4,6 +4,7 @@
   "description": null,
   "kind": "dataflow",
   "name": "DF_FACT_LOYALTY_POINTS",
+  "script_steps": [],
   "scripts": [],
   "transforms": [
    {

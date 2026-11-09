@@ -15,6 +15,7 @@ import json
 import re
 from typing import Any, Callable, Iterator
 
+from .. import graph
 from ..ir import Estate, EtlObject, ObjectKind, Transform
 
 STRING_LITERAL = re.compile(r"'[^']*'")
@@ -101,17 +102,7 @@ def _walk(estate: Estate, obj: EtlObject, seen: frozenset[str]) -> list[dict]:
 
 def reached_objects(estate: Estate, job: str) -> list[EtlObject]:
     """Job and everything it calls, in first-call (depth-first) order."""
-    order: list[str] = []
-
-    def visit(name: str) -> None:
-        if name in order or name not in estate.objects:
-            return
-        order.append(name)
-        for c in sorted(estate.objects[name].calls, key=lambda c: c.order):
-            visit(c.target)
-
-    visit(job)
-    return [estate.objects[n] for n in order]
+    return [estate.objects[n] for n in graph.reached_in_order(estate, job)]
 
 
 def job_facts(estate: Estate, job: str) -> list[dict]:

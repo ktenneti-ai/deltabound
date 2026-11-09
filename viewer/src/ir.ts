@@ -14,8 +14,13 @@ export type ObjectKind = "job" | "workflow" | "dataflow";
 export type Calls = CallStep[];
 export type Description = string | null;
 export type Name = string;
-export type Scripts = string[];
+export type AfterCall = number;
 export type Condition1 = string | null;
+export type Control1 = string | null;
+export type Index = number;
+export type ScriptSteps = ScriptStep[];
+export type Scripts = string[];
+export type Condition2 = string | null;
 export type IsDefault = boolean;
 export type Name1 = string;
 export type Branches = Branch[];
@@ -33,7 +38,7 @@ export type OpenEnd = string | null;
 export type ValidFrom = string | null;
 export type ValidTo = string | null;
 export type Inputs = string[];
-export type Condition2 = string | null;
+export type Condition3 = string | null;
 export type JoinType = string;
 export type Left = string;
 export type Right = string;
@@ -83,6 +88,7 @@ export interface EtlObject {
   description: Description;
   kind: ObjectKind;
   name: Name;
+  script_steps: ScriptSteps;
   scripts: Scripts;
   transforms: Transforms;
   variables: Variables;
@@ -96,6 +102,15 @@ export interface CallStep {
   order: Order;
   target: Target;
   target_kind: ObjectKind | null;
+}
+/**
+ * Where a script sits in its object's flow (EtlObject.scripts keeps the texts).
+ */
+export interface ScriptStep {
+  after_call: AfterCall;
+  condition: Condition1;
+  control: Control1;
+  index: Index;
 }
 export interface Transform {
   branches: Branches;
@@ -120,7 +135,7 @@ export interface Transform {
  * One named output of a routing transform (Case, Conditional Split, ...).
  */
 export interface Branch {
-  condition: Condition1;
+  condition: Condition2;
   is_default: IsDefault;
   name: Name1;
 }
@@ -144,7 +159,7 @@ export interface HistorySettings {
   valid_to: ValidTo;
 }
 export interface Join {
-  condition: Condition2;
+  condition: Condition3;
   join_type: JoinType;
   left: Left;
   right: Right;

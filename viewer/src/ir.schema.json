@@ -167,6 +167,13 @@
           "title": "Name",
           "type": "string"
         },
+        "script_steps": {
+          "items": {
+            "$ref": "#/$defs/ScriptStep"
+          },
+          "title": "Script Steps",
+          "type": "array"
+        },
         "scripts": {
           "items": {
             "type": "string"
@@ -194,6 +201,7 @@
         "description",
         "kind",
         "name",
+        "script_steps",
         "scripts",
         "transforms",
         "variables"
@@ -432,6 +440,52 @@
       ],
       "title": "ObjectKind",
       "type": "string"
+    },
+    "ScriptStep": {
+      "description": "Where a script sits in its object's flow (EtlObject.scripts keeps the texts).",
+      "properties": {
+        "after_call": {
+          "default": 0,
+          "title": "After Call",
+          "type": "integer"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "control": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "after_call",
+        "condition",
+        "control",
+        "index"
+      ],
+      "title": "ScriptStep",
+      "type": "object"
     },
     "SortKey": {
       "properties": {
