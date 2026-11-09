@@ -10,11 +10,12 @@ export function Landing(props: { boot: Boot; busy: boolean; error: string | null
       <div className="dropzone">
         <h1>Explore a legacy ETL estate</h1>
         <p className="muted">
-          Drop files or folders anywhere on this page, or choose them below. Everything is processed in your browser;
-          nothing is uploaded.
+          Use <strong>Import files</strong> or <strong>Import folder</strong>, or drop files anywhere on this page. The
+          analyzer runs in your browser; nothing is uploaded and no API is called.
         </p>
         <ul>
           <li>SAP Data Services (BODS) XML exports, one or many files</li>
+          <li>a demo source folder (for example <code>demo/sap_bods</code>)</li>
           <li>
             <code>estate.json</code> from <code>deltabound export</code>
           </li>

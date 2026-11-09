@@ -76,7 +76,8 @@ export function App() {
         if (py.current !== client) return;
         setBoot({ state: "ready", message: version });
         const src = new URLSearchParams(location.search).getAll("src");
-        if (src.length) void load(fromUrls(src.flatMap((s) => s.split(","))));
+        const urls = src.flatMap((s) => s.split(",")).map((s) => s.trim()).filter(Boolean);
+        if (urls.length) void load(fromUrls(urls));
       })
       .catch((e: Error) => {
         if (py.current === client) setBoot({ state: "failed", message: e.message });
@@ -188,16 +189,29 @@ function LoadButtons(props: { ready: boolean; onFiles: (f: FileList) => void; on
   };
   return (
     <div className="actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <button className={props.compact ? "" : "primary"} disabled={!props.ready} onClick={() => pick(files)}>
-        Open files
+      <button
+        className="primary"
+        disabled={!props.ready}
+        onClick={() => pick(files)}
+        title="Import export files (.xml, .dtsx), estate.json, explanations.json or a .zip; runs the analyzer in your browser"
+      >
+        Import files
       </button>
-      <button disabled={!props.ready} onClick={() => pick(folder)}>
-        Open folder
+      <button disabled={!props.ready} onClick={() => pick(folder)} title="Import a whole folder, e.g. a demo source folder">
+        Import folder
       </button>
       <button disabled={!props.ready} onClick={props.onDemo}>
         {props.compact ? "Demo" : "Load demo estate"}
       </button>
-      <input ref={files} type="file" multiple hidden accept=".xml,.json,.zip,.dtsx,.atl" onChange={change} />
+      <input
+        ref={files}
+        type="file"
+        multiple
+        hidden
+        accept=".xml,.json,.zip,.dtsx,.atl,.toml"
+        aria-label="Import files"
+        onChange={change}
+      />
       <input ref={folder} type="file" hidden onChange={change} {...{ webkitdirectory: "" }} />
     </div>
   );

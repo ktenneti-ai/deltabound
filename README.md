@@ -83,10 +83,20 @@ It runs the same Python parser and analysis as the CLI inside the browser
 (Pyodide), so files never leave the machine.
 
 ```bash
+deltabound viewer demo/sap_bods    # opens http://127.0.0.1:8765 with that source preloaded
+deltabound viewer                  # empty viewer: use "Import files" / "Import folder"
+```
+
+`deltabound viewer` serves the built app on this machine only (127.0.0.1). It shares only the
+files of the source you name, and the analyzer runs in the browser with no API calls. Use
+**Import files** or **Import folder** in the header to load XML, JSON, `.dtsx` or `.zip` exports
+at any time. Build the app once first:
+
+```bash
 cd viewer
 npm install
-npm run dev        # http://localhost:5173, then "Load demo estate"
-npm run build      # static site in viewer/dist/, works offline and from any path
+npm run build      # static site in viewer/dist/ (used by `deltabound viewer`)
+npm run dev        # development server on http://localhost:5173
 npm test           # Vitest; Python-side tests run with pytest
 ```
 
@@ -207,7 +217,8 @@ leaves out are added back and marked `[from IR]`.
 ```bash
 pip install -e ".[explain]"
 export ANTHROPIC_API_KEY=...            # or: ant auth login
-deltabound explain demo/sap_bods --job JOB_SALES_DAILY
+deltabound explain demo/sap_bods --job JOB_SALES_DAILY --plan       # what would be sent, worst-case cost; sends nothing
+deltabound explain demo/sap_bods --job JOB_SALES_DAILY              # asks you to type APPROVE first
 deltabound explain demo/sap_bods --all --bundle explanations.json   # one file for the viewer
 deltabound explain demo/sap_bods --job JOB_SALES_DAILY --dry-run    # write prompts only, send nothing
 DELTABOUND_LLM_PROVIDER=fake deltabound explain demo/sap_bods --job JOB_SALES_DAILY   # offline demo
@@ -263,6 +274,7 @@ deltabound/
   report.py         # markdown estate report
   explain/          # AI job explanations with citations (Anthropic), cached
   bridge.py         # entry points for the web viewer (bytes in, JSON out)
+  serve.py          # `deltabound viewer`: local-only server for the built viewer
   convert/          # IR -> Databricks notebooks + Asset Bundle + conversion report
   validate/         # step-level legacy vs Databricks comparison + sign-off report
 viewer/             # static web viewer: Vite + React + React Flow + Pyodide

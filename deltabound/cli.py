@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 from pathlib import Path
 
 from . import graph, report
@@ -193,6 +194,40 @@ def _validate_one(a) -> None:
         sys.exit(1)
 
 
+def cmd_viewer(a) -> None:
+    from .project import ProjectError, find_manifest, load_project
+    from .serve import ServeError, serve
+
+    files: list[Path] = []
+    for raw in a.paths or []:
+        p = Path(raw)
+        if find_manifest(p) is not None:
+            try:
+                project = load_project(p)
+                files += project.export_files()
+            except ProjectError as e:
+                sys.exit(f"viewer: {e}")
+            bundle = project.base / "explanations.json"
+            if bundle.exists():
+                files.append(bundle)
+        elif p.is_dir():
+            files += sorted(f for pat in ("*.xml", "*.dtsx", "*.json", "*.zip") for f in p.rglob(pat))
+        elif p.exists():
+            files.append(p)
+        else:
+            sys.exit(f"viewer: {p} not found")
+    try:
+        server, link = serve(files, port=a.port, open_browser=not a.no_browser)
+    except ServeError as e:
+        sys.exit(f"viewer: {e}")
+    shared = f"Preloading {len(files)} file(s). " if files else ""
+    print(f"DeltaBound viewer:\n  {link}\n{shared}Serving on this machine only. Press Ctrl+C to stop.", flush=True)
+    try:
+        threading.Event().wait()
+    except KeyboardInterrupt:
+        server.shutdown()
+
+
 def schema_json() -> str:
     """JSON Schema of the IR as serialised (model_dump always writes every field, defaults included)."""
     from .ir import Estate
@@ -328,6 +363,12 @@ def main(argv: list[str] | None = None) -> None:
     vr.add_argument("--waivers", help="extra waivers TOML ([[waivers]] entries)")
     vr.add_argument("--conversion-report", help="conversion_report.json from deltabound convert")
     vr.set_defaults(fn=cmd_validate_run)
+
+    vw = sub.add_parser("viewer", help="open the web viewer on a local URL (optionally preloading a source)")
+    vw.add_argument("paths", nargs="*", help="source folder, export files or folders to preload")
+    vw.add_argument("--port", type=int, default=8765, help="port on 127.0.0.1 (0 picks a free one)")
+    vw.add_argument("--no-browser", action="store_true", help="print the URL without opening a browser")
+    vw.set_defaults(fn=cmd_viewer)
 
     sc = sub.add_parser("schema", help="write the IR JSON Schema (used by the viewer's TypeScript types)")
     sc.add_argument("--out", default="ir.schema.json")
