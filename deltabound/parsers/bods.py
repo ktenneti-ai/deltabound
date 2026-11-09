@@ -21,6 +21,7 @@ from ..ir import (
     ColumnMapping,
     Estate,
     EtlObject,
+    HistorySettings,
     Join,
     LookupRef,
     ObjectKind,
@@ -75,10 +76,21 @@ TAG_ORDER_BY = "DIOrderBy"
 TAG_EXPRESSION = "DIExpression"  # expr, sortType (ASC|DESC) inside DIOrderBy
 TAG_CASE_BRANCH = "DICaseBranch"  # name, expr, isDefault
 TAG_LOOKUP_CONDITION = "DILookupCondition"  # lookupColumn, inputExpr (DILookup transform)
-TAG_LOOKUP_RETURN = "DILookupReturn"  # column
+TAG_LOOKUP_RETURN = "DILookupReturn"  # column, defaultValue
+TAG_PRIMARY_KEY = "DIInputPrimaryKey"  # Table Comparison business key: DIColumn children
+TAG_COMPARE_COLUMNS = "DICompareColumns"  # Table Comparison compare columns: DIColumn children
+TAG_KEY_COLUMN = "DIColumn"  # name
+# History Preserving attributes (UNVERIFIED names) -> HistorySettings fields.
+HISTORY_ATTRS = {"validFromColumn": "valid_from", "validToColumn": "valid_to",
+                 "currentFlagColumn": "current_flag", "currentFlagValue": "current_value",
+                 "openEndDate": "open_end"}
+ATTR_GENERATED_KEY = "keyColumn"  # Key Generation
+ATTR_CACHE = "cachePolicy"  # Lookup transform
+ATTR_RETURN_POLICY = "returnPolicy"  # Lookup transform
 
 # Attributes mapped to IR fields; every other transform attribute goes to Transform.options.
-CONSUMED_ATTRS = {"name", "tableName", "datastoreName", "ownerName"}
+CONSUMED_ATTRS = {"name", "tableName", "datastoreName", "ownerName", ATTR_GENERATED_KEY, ATTR_CACHE,
+                  ATTR_RETURN_POLICY, *HISTORY_ATTRS}
 
 JOIN_TYPES = {
     "inner": "inner", "left": "left_outer", "left_outer": "left_outer",
@@ -241,15 +253,25 @@ def _parse_transform(t: ET.Element, estate: Estate, df_name: str) -> Transform:
         for b in t.findall(TAG_CASE_BRANCH)
     ]
     if kind == "lookup":
+        returns = t.findall(TAG_LOOKUP_RETURN)
         tr.lookups.append(
             LookupRef(
                 function="lookup_transform",
                 table=tr.table,
-                return_columns=[r.get("column", "?") for r in t.findall(TAG_LOOKUP_RETURN)],
+                return_columns=[r.get("column", "?") for r in returns],
+                default_values=[r.get("defaultValue", "NULL") for r in returns],
                 match_columns=[(c.get("lookupColumn", "?"), c.get("inputExpr", "?"))
                                for c in t.findall(TAG_LOOKUP_CONDITION)],
+                policy=(t.get(ATTR_RETURN_POLICY) or "").lower() or None,
+                cache=t.get(ATTR_CACHE),
             )
         )
+    tr.key_columns = [c.get("name", "?") for c in t.findall(f"{TAG_PRIMARY_KEY}/{TAG_KEY_COLUMN}")]
+    tr.compare_columns = [c.get("name", "?") for c in t.findall(f"{TAG_COMPARE_COLUMNS}/{TAG_KEY_COLUMN}")]
+    history = {field: t.get(attr) for attr, field in HISTORY_ATTRS.items() if t.get(attr)}
+    if history:
+        tr.history = HistorySettings(**history)
+    tr.generated_key = t.get(ATTR_GENERATED_KEY)
     return tr
 
 
@@ -335,8 +357,12 @@ def _parse_lookup_calls(expr: str, column: str, estate: Estate, where: str) -> l
         else:
             parts = _split_top(args)
             if function == "lookup_ext" and len(parts) >= 4:
-                table_text = (_split_top(_unbracket(parts[0])) or [""])[0]
+                spec = _split_top(_unbracket(parts[0]))
+                table_text = (spec or [""])[0]
+                ref.cache = spec[1].strip("'") if len(spec) > 1 else None
+                ref.policy = spec[2].strip("'").lower() if len(spec) > 2 else None
                 ref.return_columns = _split_top(_unbracket(parts[1]))
+                ref.default_values = _split_top(_unbracket(parts[2]))
                 cond = _split_top(_unbracket(parts[3]))
                 if len(cond) % 3:
                     problem = "condition list is not (column, operator, expression) triples"
@@ -344,6 +370,8 @@ def _parse_lookup_calls(expr: str, column: str, estate: Estate, where: str) -> l
             elif function == "lookup" and len(parts) >= 6:
                 table_text = parts[0]
                 ref.return_columns = [parts[1]]
+                ref.default_values = [parts[2]]
+                ref.cache = parts[3].strip("'")
                 ref.match_columns = [(parts[i], parts[i + 1]) for i in range(4, len(parts) - 1, 2)]
             else:
                 table_text = ""

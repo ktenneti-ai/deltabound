@@ -9,9 +9,13 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [],
     "joins": [],
+    "key_columns": [],
     "kind": "table_source",
     "lookups": [],
     "name": "STG_POS_TXN",
@@ -77,11 +81,15 @@
       ]
      }
     ],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "STG_POS_TXN"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "query",
     "lookups": [],
     "name": "Q_POS_IN",
@@ -110,11 +118,15 @@
      }
     ],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "Q_POS_IN"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "case",
     "lookups": [],
     "name": "CASE_CHANNEL",
@@ -175,14 +187,22 @@
       "source_columns": []
      }
     ],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "CH_STORE"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "query",
     "lookups": [
      {
+      "cache": "PRE_LOAD_CACHE",
+      "default_values": [
+       "-1"
+      ],
       "function": "lookup",
       "match_columns": [
        [
@@ -191,6 +211,7 @@
        ]
       ],
       "output_column": "STORE_KEY",
+      "policy": null,
       "raw": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_STORE.STORE_CODE)",
       "return_columns": [
        "STORE_KEY"
@@ -260,14 +281,22 @@
       "source_columns": []
      }
     ],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "CH_KIOSK"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "query",
     "lookups": [
      {
+      "cache": "PRE_LOAD_CACHE",
+      "default_values": [
+       "-1"
+      ],
       "function": "lookup",
       "match_columns": [
        [
@@ -276,6 +305,7 @@
        ]
       ],
       "output_column": "STORE_KEY",
+      "policy": null,
       "raw": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_KIOSK.STORE_CODE)",
       "return_columns": [
        "STORE_KEY"
@@ -342,11 +372,15 @@
       "source_columns": []
      }
     ],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "CH_OTHER"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "query",
     "lookups": [],
     "name": "Q_OTHER",
@@ -359,13 +393,17 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "Q_STORE",
      "Q_KIOSK",
      "Q_OTHER"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "merge",
     "lookups": [],
     "name": "MRG_CHANNELS",
@@ -378,11 +416,15 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "MRG_CHANNELS"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "table_target",
     "lookups": [],
     "name": "FACT_POS_SALES",

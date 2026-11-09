@@ -168,7 +168,8 @@ def test_merge_keeps_all_inputs():
 
 
 def test_tool_specific_attributes_go_to_options():
-    assert transform("DF_FACT_LOYALTY_POINTS", "LKP_MEMBER_KEY").options == {"cachePolicy": "PRE_LOAD_CACHE"}
+    assert transform("DF_DIM_CUSTOMER", "TC_CUST").options == {"comparisonMethod": "ROW_BY_ROW_SELECT"}
+    assert transform("DF_FACT_LOYALTY_POINTS", "LKP_MEMBER_KEY").options == {}  # cachePolicy -> LookupRef.cache
     tgt = next(t for t in _estate().objects["DF_STG_ORDERS_FULL"].transforms if t.kind == "table_target")
     assert tgt.options["loadMode"] == "truncate"
 
@@ -245,3 +246,41 @@ def test_export_round_trip():
     e = _estate()
     again = Estate.model_validate_json(e.model_dump_json())
     assert again == e
+
+
+# ---------- IR 0.2.1: details needed for conversion ----------
+
+def test_lookup_defaults_policy_and_cache():
+    lk = next(l for l in transform("DF_FACT_SALES", "Q_JOIN").lookups if l.output_column == "PRODUCT_KEY")
+    assert (lk.default_values, lk.policy, lk.cache) == (["-1"], "max", "PRE_LOAD_CACHE")
+    old = transform("DF_FACT_STOCK_DAILY", "Q_STOCK").lookups[1]
+    assert (old.default_values, old.policy, old.cache) == (["-1"], None, "PRE_LOAD_CACHE")
+    cat = next(l for l in transform("DF_AGG_MARGIN_BY_CATEGORY", "Q_CAT").lookups if l.output_column == "CATEGORY")
+    assert cat.default_values == ["'UNKNOWN'"]
+    tr = transform("DF_FACT_LOYALTY_POINTS", "LKP_MEMBER_KEY").lookups[0]
+    assert (tr.cache, tr.default_values, tr.policy) == ("PRE_LOAD_CACHE", ["NULL"], None)
+
+
+def test_table_comparison_keys():
+    tc = transform("DF_DIM_CUSTOMER", "TC_CUST")
+    assert tc.key_columns == ["CUSTOMER_ID"]
+    assert tc.compare_columns == ["CUSTOMER_NAME", "COUNTRY", "CITY"]
+    assert transform("DF_DIM_CALENDAR_HOLIDAYS", "TC_HOL").key_columns == ["HOLIDAY_DATE", "COUNTRY"]
+    assert transform("DF_DIM_PRODUCT", "TC_PROD").compare_columns == []
+
+
+def test_history_and_generated_key():
+    hp = transform("DF_DIM_CUSTOMER", "HP_CUST")
+    assert (hp.history.valid_from, hp.history.valid_to, hp.history.current_flag, hp.history.current_value) == \
+        ("VALID_FROM", "VALID_TO", "IS_CURRENT", "1")
+    assert transform("DF_DIM_LOYALTY_MEMBER", "HP_MEMBER").history.current_flag is None
+    assert transform("DF_DIM_CUSTOMER", "KG_CUST").generated_key == "CUSTOMER_KEY"
+    assert "keyColumn" not in transform("DF_DIM_CUSTOMER", "KG_CUST").options
+
+
+def test_ir_0_2_0_json_still_loads():
+    old = Path(__file__).parent.parent / "samples" / "ir" / "estate_v0.2.0.json"
+    e = Estate.model_validate_json(old.read_text())
+    assert e.ir_version == "0.2.0"
+    t = e.objects["DF_FACT_SALES"].transforms[0]
+    assert t.key_columns == [] and t.history is None and t.generated_key is None

@@ -113,8 +113,16 @@ sleep(60000);</DIScript>
       </DIQuery>
       <DITableComparison name="TC_CUST" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_CUSTOMER" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_CUST" />
+        <DIInputPrimaryKey>
+          <DIColumn name="CUSTOMER_ID" />
+        </DIInputPrimaryKey>
+        <DICompareColumns>
+          <DIColumn name="CUSTOMER_NAME" />
+          <DIColumn name="COUNTRY" />
+          <DIColumn name="CITY" />
+        </DICompareColumns>
       </DITableComparison>
-      <DIHistoryPreserving name="HP_CUST" validFromColumn="VALID_FROM" validToColumn="VALID_TO">
+      <DIHistoryPreserving name="HP_CUST" validFromColumn="VALID_FROM" validToColumn="VALID_TO" currentFlagColumn="IS_CURRENT" currentFlagValue="1">
         <DIInputView name="TC_CUST" />
       </DIHistoryPreserving>
       <DIKeyGeneration name="KG_CUST" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_CUSTOMER" keyColumn="CUSTOMER_KEY">
@@ -180,6 +188,9 @@ sleep(60000);</DIScript>
       </DIQuery>
       <DITableComparison name="TC_PROD" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_PRODUCT" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_PROD" />
+        <DIInputPrimaryKey>
+          <DIColumn name="PRODUCT_ID" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIKeyGeneration name="KG_PROD" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_PRODUCT" keyColumn="PRODUCT_KEY">
         <DIInputView name="TC_PROD" />
@@ -212,6 +223,9 @@ sleep(60000);</DIScript>
       </DIQuery>
       <DITableComparison name="TC_STORE" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_STORE" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_STORE" />
+        <DIInputPrimaryKey>
+          <DIColumn name="STORE_CODE" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIKeyGeneration name="KG_STORE" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_STORE" keyColumn="STORE_KEY">
         <DIInputView name="TC_STORE" />
@@ -375,6 +389,9 @@ sleep(60000);</DIScript>
       </DIQuery>
       <DITableComparison name="TC_SUPP" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_SUPPLIER" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_SUPP" />
+        <DIInputPrimaryKey>
+          <DIColumn name="SUPPLIER_ID" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIKeyGeneration name="KG_SUPP" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_SUPPLIER" keyColumn="SUPPLIER_KEY">
         <DIInputView name="TC_SUPP" />

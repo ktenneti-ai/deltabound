@@ -62,6 +62,10 @@
       </DIQuery>
       <DITableComparison name="TC_HOL" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_HOLIDAY" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_HOL" />
+        <DIInputPrimaryKey>
+          <DIColumn name="HOLIDAY_DATE" />
+          <DIColumn name="COUNTRY" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_HOLIDAY" loadMode="append">
         <DIInputView name="TC_HOL" />

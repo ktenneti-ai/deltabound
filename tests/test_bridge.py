@@ -54,7 +54,8 @@ def test_load_estate_json_including_old_ir_versions():
     r = bridge.load([("estate.json", current)])
     assert r["ok"] and r["analysis"]["counts"]["job"] == 15
     old = bridge.load(files(SAMPLES / "ir" / "estate_v0.1.0.json"))
-    assert old["ok"] and "IR 0.1.0 file read by IR 0.2.0 code" in old["load_report"][0]["message"]
+    from deltabound.ir import IR_VERSION
+    assert old["ok"] and f"IR 0.1.0 file read by IR {IR_VERSION} code" in old["load_report"][0]["message"]
 
 
 def test_zip_with_folder_and_junk():

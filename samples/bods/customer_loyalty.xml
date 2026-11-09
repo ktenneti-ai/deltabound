@@ -169,6 +169,12 @@
       </DIQuery>
       <DITableComparison name="TC_MEMBER" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_LOYALTY_MEMBER" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_MEMBER" />
+        <DIInputPrimaryKey>
+          <DIColumn name="MEMBER_ID" />
+        </DIInputPrimaryKey>
+        <DICompareColumns>
+          <DIColumn name="TIER" />
+        </DICompareColumns>
       </DITableComparison>
       <DIHistoryPreserving name="HP_MEMBER" validFromColumn="VALID_FROM" validToColumn="VALID_TO">
         <DIInputView name="TC_MEMBER" />

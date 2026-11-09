@@ -144,6 +144,9 @@
       </DIQuery>
       <DITableComparison name="TC_WH" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_WAREHOUSE" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_WH" />
+        <DIInputPrimaryKey>
+          <DIColumn name="WAREHOUSE_ID" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIKeyGeneration name="KG_WH" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_WAREHOUSE" keyColumn="WAREHOUSE_KEY">
         <DIInputView name="TC_WH" />
@@ -407,6 +410,9 @@
       </DIQuery>
       <DITableComparison name="TC_MOVES" datastoreName="DS_DWH" ownerName="MART" tableName="FACT_STOCK_MOVES" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_MV" />
+        <DIInputPrimaryKey>
+          <DIColumn name="MOVE_ID" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIMapOperation name="MO_MOVES" mapDeleteTo="DISCARD">
         <DIInputView name="TC_MOVES" />

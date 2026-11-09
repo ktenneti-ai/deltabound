@@ -201,6 +201,80 @@
       "title": "EtlObject",
       "type": "object"
     },
+    "HistorySettings": {
+      "description": "Bookkeeping columns of a history-preserving (SCD type 2) transform.",
+      "properties": {
+        "current_flag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Flag"
+        },
+        "current_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Value"
+        },
+        "open_end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Open End"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid From"
+        },
+        "valid_to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid To"
+        }
+      },
+      "required": [
+        "current_flag",
+        "current_value",
+        "open_end",
+        "valid_from",
+        "valid_to"
+      ],
+      "title": "HistorySettings",
+      "type": "object"
+    },
     "Join": {
       "properties": {
         "condition": {
@@ -241,6 +315,25 @@
     "LookupRef": {
       "description": "A lookup against a reference table, as a function call or a transform.",
       "properties": {
+        "cache": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache"
+        },
+        "default_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Values",
+          "type": "array"
+        },
         "function": {
           "title": "Function",
           "type": "string"
@@ -274,6 +367,18 @@
           "default": null,
           "title": "Output Column"
         },
+        "policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy"
+        },
         "raw": {
           "anyOf": [
             {
@@ -306,9 +411,12 @@
         }
       },
       "required": [
+        "cache",
+        "default_values",
         "function",
         "match_columns",
         "output_column",
+        "policy",
         "raw",
         "return_columns",
         "table"
@@ -399,12 +507,42 @@
           "title": "Columns",
           "type": "array"
         },
+        "compare_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Compare Columns",
+          "type": "array"
+        },
+        "generated_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated Key"
+        },
         "group_by": {
           "items": {
             "type": "string"
           },
           "title": "Group By",
           "type": "array"
+        },
+        "history": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HistorySettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "inputs": {
           "items": {
@@ -418,6 +556,13 @@
             "$ref": "#/$defs/Join"
           },
           "title": "Joins",
+          "type": "array"
+        },
+        "key_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Key Columns",
           "type": "array"
         },
         "kind": {
@@ -488,9 +633,13 @@
       "required": [
         "branches",
         "columns",
+        "compare_columns",
+        "generated_key",
         "group_by",
+        "history",
         "inputs",
         "joins",
+        "key_columns",
         "kind",
         "lookups",
         "name",
@@ -551,7 +700,7 @@
   },
   "properties": {
     "ir_version": {
-      "default": "0.2.0",
+      "default": "0.2.1",
       "title": "Ir Version",
       "type": "string"
     },

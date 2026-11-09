@@ -13,7 +13,9 @@ from pydantic import BaseModel, Field
 
 # 0.2.0: adds Transform.joins/group_by/order_by/branches/lookups/options and
 # CallStep.control. All new fields have defaults, so 0.1.0 JSON still loads.
-IR_VERSION = "0.2.0"
+# 0.2.1: adds LookupRef.default_values/policy/cache and Transform.key_columns/
+# compare_columns/history/generated_key (needed by convert/). Additive only.
+IR_VERSION = "0.2.1"
 
 
 class ObjectKind(str, Enum):
@@ -88,7 +90,20 @@ class LookupRef(BaseModel):
     return_columns: list[str] = Field(default_factory=list)
     match_columns: list[tuple[str, str]] = Field(default_factory=list)  # (lookup column, input expression)
     output_column: Optional[str] = None  # mapped column that uses it; None for a lookup transform
+    default_values: list[str] = Field(default_factory=list)  # value(s) returned when nothing matches, as expressions
+    policy: Optional[str] = None  # which row wins when several match: "max", "min", ... (lower case)
+    cache: Optional[str] = None  # tool's caching hint, e.g. "PRE_LOAD_CACHE"; informational
     raw: Optional[str] = None  # original call text, always kept
+
+
+class HistorySettings(BaseModel):
+    """Bookkeeping columns of a history-preserving (SCD type 2) transform."""
+
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
+    current_flag: Optional[str] = None
+    current_value: Optional[str] = None  # flag value marking the current row
+    open_end: Optional[str] = None  # valid_to value of the current row, e.g. "9999-12-31"
 
 
 class Transform(BaseModel):
@@ -103,7 +118,11 @@ class Transform(BaseModel):
     order_by: list[SortKey] = Field(default_factory=list)
     branches: list[Branch] = Field(default_factory=list)
     lookups: list[LookupRef] = Field(default_factory=list)
-    options: dict[str, str] = Field(default_factory=dict)  # tool-specific extras (load mode, cache policy...)
+    key_columns: list[str] = Field(default_factory=list)  # business key a comparison/SCD transform matches on
+    compare_columns: list[str] = Field(default_factory=list)  # columns compared for changes (empty = all non-key)
+    history: Optional[HistorySettings] = None  # set on history-preserving (SCD2) transforms
+    generated_key: Optional[str] = None  # column a key-generation transform fills
+    options: dict[str, str] = Field(default_factory=dict)  # tool-specific extras (load mode, ...)
     raw_tag: Optional[str] = None  # original element name, kept for opaque nodes
 
 

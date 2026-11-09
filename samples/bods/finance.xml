@@ -151,6 +151,9 @@
       </DIQuery>
       <DITableComparison name="TC_CC" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_COST_CENTER" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_CC" />
+        <DIInputPrimaryKey>
+          <DIColumn name="COST_CENTER" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIKeyGeneration name="KG_CC" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_COST_CENTER" keyColumn="COST_CENTER_KEY">
         <DIInputView name="TC_CC" />
@@ -177,6 +180,9 @@
       </DIQuery>
       <DITableComparison name="TC_ACCT" datastoreName="DS_DWH" ownerName="MART" tableName="DIM_GL_ACCOUNT" comparisonMethod="ROW_BY_ROW_SELECT">
         <DIInputView name="Q_ACCT" />
+        <DIInputPrimaryKey>
+          <DIColumn name="GL_ACCOUNT" />
+        </DIInputPrimaryKey>
       </DITableComparison>
       <DIDatabaseTableTarget datastoreName="DS_DWH" ownerName="MART" tableName="DIM_GL_ACCOUNT" loadMode="append">
         <DIInputView name="TC_ACCT" />

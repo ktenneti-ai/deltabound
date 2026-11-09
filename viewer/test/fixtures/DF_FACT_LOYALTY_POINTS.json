@@ -9,9 +9,13 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [],
     "joins": [],
+    "key_columns": [],
     "kind": "table_source",
     "lookups": [],
     "name": "STG_LOYALTY_TXN",
@@ -61,11 +65,15 @@
       ]
      }
     ],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "STG_LOYALTY_TXN"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "query",
     "lookups": [],
     "name": "Q_TXN",
@@ -78,14 +86,22 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "Q_TXN"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "lookup",
     "lookups": [
      {
+      "cache": "PRE_LOAD_CACHE",
+      "default_values": [
+       "NULL"
+      ],
       "function": "lookup_transform",
       "match_columns": [
        [
@@ -94,6 +110,7 @@
        ]
       ],
       "output_column": null,
+      "policy": null,
       "raw": null,
       "return_columns": [
        "MEMBER_KEY"
@@ -106,9 +123,7 @@
      }
     ],
     "name": "LKP_MEMBER_KEY",
-    "options": {
-     "cachePolicy": "PRE_LOAD_CACHE"
-    },
+    "options": {},
     "order_by": [],
     "raw_tag": "DILookup",
     "table": {
@@ -121,11 +136,15 @@
    {
     "branches": [],
     "columns": [],
+    "compare_columns": [],
+    "generated_key": null,
     "group_by": [],
+    "history": null,
     "inputs": [
      "LKP_MEMBER_KEY"
     ],
     "joins": [],
+    "key_columns": [],
     "kind": "table_target",
     "lookups": [],
     "name": "FACT_LOYALTY_POINTS",

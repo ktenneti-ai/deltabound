@@ -24,17 +24,28 @@ export type DataType = string | null;
 export type Expression = string | null;
 export type SourceColumns = string[];
 export type Columns = ColumnMapping[];
+export type CompareColumns = string[];
+export type GeneratedKey = string | null;
 export type GroupBy = string[];
+export type CurrentFlag = string | null;
+export type CurrentValue = string | null;
+export type OpenEnd = string | null;
+export type ValidFrom = string | null;
+export type ValidTo = string | null;
 export type Inputs = string[];
 export type Condition2 = string | null;
 export type JoinType = string;
 export type Left = string;
 export type Right = string;
 export type Joins = Join[];
+export type KeyColumns = string[];
 export type Kind = string;
+export type Cache = string | null;
+export type DefaultValues = string[];
 export type Function = string;
 export type MatchColumns = [unknown, unknown][];
 export type OutputColumn = string | null;
+export type Policy = string | null;
 export type Raw = string | null;
 export type ReturnColumns = string[];
 export type Datastore = string | null;
@@ -89,9 +100,13 @@ export interface CallStep {
 export interface Transform {
   branches: Branches;
   columns: Columns;
+  compare_columns: CompareColumns;
+  generated_key: GeneratedKey;
   group_by: GroupBy;
+  history: HistorySettings | null;
   inputs: Inputs;
   joins: Joins;
+  key_columns: KeyColumns;
   kind: Kind;
   lookups: Lookups;
   name: Name2;
@@ -118,6 +133,16 @@ export interface ColumnMapping {
   expression: Expression;
   source_columns: SourceColumns;
 }
+/**
+ * Bookkeeping columns of a history-preserving (SCD type 2) transform.
+ */
+export interface HistorySettings {
+  current_flag: CurrentFlag;
+  current_value: CurrentValue;
+  open_end: OpenEnd;
+  valid_from: ValidFrom;
+  valid_to: ValidTo;
+}
 export interface Join {
   condition: Condition2;
   join_type: JoinType;
@@ -128,9 +153,12 @@ export interface Join {
  * A lookup against a reference table, as a function call or a transform.
  */
 export interface LookupRef {
+  cache: Cache;
+  default_values: DefaultValues;
   function: Function;
   match_columns: MatchColumns;
   output_column: OutputColumn;
+  policy: Policy;
   raw: Raw;
   return_columns: ReturnColumns;
   table: TableRef | null;
