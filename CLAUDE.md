@@ -32,6 +32,8 @@ Python package and CLI name: `deltabound`.
   Pyodide runtime into `public/` (gitignored); everything is self-hosted, no CDN at run time.
   When the IR changes: `cd viewer && npm run gen:types`, and regenerate the fixtures with
   `.venv/bin/python viewer/scripts/gen_fixtures.py` (pytest fails until both are current).
+  Hosted at https://ktenneti-ai.github.io/deltabound/ by .github/workflows/pages.yml (repo is
+  public since 2026-11-09; GitHub Pages is not available for private repos on this plan).
 - `deltabound/convert/` — IR -> Databricks notebooks (PySpark + Spark SQL over temp views)
   and an Asset Bundle. Reads the IR only. Rule for every transform kind it converts; anything
   else becomes a TODO cell that raises NotImplementedError (never a pass-through guess).

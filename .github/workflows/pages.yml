@@ -1,0 +1,56 @@
+# Builds the static viewer (viewer/dist) and publishes it to GitHub Pages.
+# The site is fully static: Python (Pyodide) runs in the visitor's browser and
+# nothing is uploaded anywhere. It makes no API calls (explain is CLI-only).
+name: Viewer on GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["deltabound/**", "viewer/**", "demo/sap_bods/exports/**", "pyproject.toml", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      - name: Install npm packages
+        working-directory: viewer
+        run: npm ci
+      - name: Test and build the viewer
+        working-directory: viewer
+        env:
+          PYTHON: python # prepare-py builds the deltabound wheel with this interpreter
+        run: |
+          npm test
+          npm run build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

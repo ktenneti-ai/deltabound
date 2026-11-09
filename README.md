@@ -83,6 +83,10 @@ or `estate.json`, `explanations.json`, a folder, or a `.zip` of any of these.
 It runs the same Python parser and analysis as the CLI inside the browser
 (Pyodide), so files never leave the machine.
 
+**Hosted:** https://ktenneti-ai.github.io/deltabound/ (GitHub Pages, rebuilt by
+`.github/workflows/pages.yml` on every push to `main` that touches the viewer or the package).
+It is the same static app: imported files are read in your browser and never uploaded.
+
 ```bash
 deltabound viewer demo/sap_bods    # opens http://127.0.0.1:8765 with that source preloaded
 deltabound viewer                  # empty viewer: use "Import files" / "Import folder"
