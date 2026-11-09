@@ -96,27 +96,38 @@ COL_REF = re.compile(r"(?<![\w$.])([A-Za-z_][\w$]*)\.([A-Za-z_][\w$]*)\b(?!\.)")
 STRING_LITERAL = re.compile(r"'[^']*'")
 
 
+SOURCE_TOOL = "sap_data_services"
+
+
 def parse_files(paths: Iterable[Path | str]) -> Estate:
-    estate = Estate(source_tool="sap_data_services")
+    estate = Estate(source_tool=SOURCE_TOOL)
     for p in paths:
-        _parse_file(Path(p), estate)
+        p = Path(p)
+        _parse_root(ET.parse(p).getroot(), p.name, estate)
     return estate
 
 
-def _parse_file(path: Path, estate: Estate) -> None:
-    root = ET.parse(path).getroot()
+def parse_document(name: str, data: bytes, estate: Estate) -> None:
+    """Parse one export file given as bytes (no filesystem, e.g. in the browser) into `estate`.
+
+    Raises xml.etree.ElementTree.ParseError for malformed XML; `estate` is unchanged then.
+    """
+    _parse_root(ET.fromstring(data), name, estate)
+
+
+def _parse_root(root: ET.Element, file_name: str, estate: Estate) -> None:
     if root.tag != TAG_ROOT:
-        estate.unparsed.append(f"{path.name}: unexpected root <{root.tag}>")
+        estate.unparsed.append(f"{file_name}: unexpected root <{root.tag}>")
     estate.source_version = estate.source_version or root.get("productVersion")
     for el in root:
         kind = TAG_KIND.get(el.tag)
         if kind is None:
-            estate.unparsed.append(f"{path.name}: top-level <{el.tag}>")
+            estate.unparsed.append(f"{file_name}: top-level <{el.tag}>")
             continue
         obj = _parse_object(el, kind, estate)
         if obj.name in estate.objects:
             estate.unparsed.append(
-                f"{path.name}: duplicate {kind.value} {obj.name}; first definition kept, this one ignored"
+                f"{file_name}: duplicate {kind.value} {obj.name}; first definition kept, this one ignored"
             )
             continue
         estate.objects[obj.name] = obj

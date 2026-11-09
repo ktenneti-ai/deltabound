@@ -36,6 +36,29 @@ def tree_lines(estate: Estate, root: str) -> list[str]:
     return lines
 
 
+def call_tree(estate: Estate, root: str) -> dict:
+    """Nested call tree of `root`: {name, kind, condition, control, order, calls: [...]}.
+
+    kind is "missing" for objects not in the export. A call that closes a cycle
+    is marked cycle=True and not expanded.
+    """
+
+    def node(name: str, cond: str | None, control: str | None, order: int, seen: frozenset[str]) -> dict:
+        obj = estate.objects.get(name)
+        out: dict = {"name": name, "kind": obj.kind.value if obj else "missing",
+                     "condition": cond, "control": control, "order": order, "calls": []}
+        if obj is None:
+            return out
+        if name in seen:
+            out["cycle"] = True
+            return out
+        out["calls"] = [node(c.target, c.condition, c.control, c.order, seen | {name})
+                        for c in sorted(obj.calls, key=lambda c: c.order)]
+        return out
+
+    return node(root, None, None, 0, frozenset())
+
+
 def unreachable(estate: Estate) -> list[str]:
     """Workflows and dataflows no job ever reaches: candidates to skip migrating."""
     g = call_graph(estate)

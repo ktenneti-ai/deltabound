@@ -23,15 +23,22 @@ Python package and CLI name: `deltabound`.
   `prompts.PROMPT_VERSION` whenever a prompt or schema changes (it is part of the cache key).
   Tests must never call the network.
 - `deltabound/cli.py` — thin command-line layer over graph, report and explain functions.
-- Next: `viewer/` (Vite + React + React Flow; runs the Python parser in the browser via
-  Pyodide, approved 2026-11-09). Later: `convert/`, `validate/`. SSIS is deferred. Design
-  docs for all of these are in `docs/design/`.
+- `deltabound/bridge.py` — viewer entry points (format detection, load, analysis, lineage).
+  Like cli.py it may import parsers. Works on bytes, returns JSON-ready dicts.
+- `viewer/` — static web viewer (Vite, React 19, React Flow, dagre, Pyodide 314.0.7). It runs
+  deltabound itself in a Web Worker; no lineage or parsing logic is re-implemented in
+  TypeScript (only edge traversal). `npm run prepare:py` builds the wheels and copies the
+  Pyodide runtime into `public/` (gitignored); everything is self-hosted, no CDN at run time.
+  When the IR changes: `cd viewer && npm run gen:types`, and regenerate the fixtures with
+  `.venv/bin/python viewer/scripts/gen_fixtures.py` (pytest fails until both are current).
+- Next: `convert/`, `validate/`. SSIS is deferred. Design docs are in `docs/design/`.
 
 ## Rules
 - Unknown or unsupported elements become `opaque` transforms and are listed in
   `Estate.unparsed`. Never silently drop anything; coverage must stay measurable.
 - Every feature gets pytest tests using files in `samples/`. Run `pytest -q` before
-  declaring a task done.
+  declaring a task done; for viewer changes also `cd viewer && npm test && npm run build`,
+  and check the change in a real browser.
 - Samples are SYNTHETIC only (fictional companies). Never add real client or employer
   data, names, table names or logic.
 - The BODS tag names in `parsers/bods.py` are unverified against real exports. Keep all

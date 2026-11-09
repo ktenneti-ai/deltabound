@@ -1,0 +1,598 @@
+{
+  "$defs": {
+    "Branch": {
+      "description": "One named output of a routing transform (Case, Conditional Split, ...).",
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "is_default": {
+          "default": false,
+          "title": "Is Default",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "condition",
+        "is_default",
+        "name"
+      ],
+      "title": "Branch",
+      "type": "object"
+    },
+    "CallStep": {
+      "description": "One object calling another (job -> workflow, workflow -> dataflow...).",
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "control": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Control"
+        },
+        "order": {
+          "default": 0,
+          "title": "Order",
+          "type": "integer"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "target_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObjectKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "condition",
+        "control",
+        "order",
+        "target",
+        "target_kind"
+      ],
+      "title": "CallStep",
+      "type": "object"
+    },
+    "ColumnMapping": {
+      "description": "Output column of a transform and the expression that produces it.",
+      "properties": {
+        "column": {
+          "title": "Column",
+          "type": "string"
+        },
+        "data_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Type"
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expression"
+        },
+        "source_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Columns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "column",
+        "data_type",
+        "expression",
+        "source_columns"
+      ],
+      "title": "ColumnMapping",
+      "type": "object"
+    },
+    "EtlObject": {
+      "properties": {
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/CallStep"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "kind": {
+          "$ref": "#/$defs/ObjectKind"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "scripts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scripts",
+          "type": "array"
+        },
+        "transforms": {
+          "items": {
+            "$ref": "#/$defs/Transform"
+          },
+          "title": "Transforms",
+          "type": "array"
+        },
+        "variables": {
+          "items": {
+            "$ref": "#/$defs/Variable"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "calls",
+        "description",
+        "kind",
+        "name",
+        "scripts",
+        "transforms",
+        "variables"
+      ],
+      "title": "EtlObject",
+      "type": "object"
+    },
+    "Join": {
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "join_type": {
+          "default": "inner",
+          "title": "Join Type",
+          "type": "string"
+        },
+        "left": {
+          "title": "Left",
+          "type": "string"
+        },
+        "right": {
+          "title": "Right",
+          "type": "string"
+        }
+      },
+      "required": [
+        "condition",
+        "join_type",
+        "left",
+        "right"
+      ],
+      "title": "Join",
+      "type": "object"
+    },
+    "LookupRef": {
+      "description": "A lookup against a reference table, as a function call or a transform.",
+      "properties": {
+        "function": {
+          "title": "Function",
+          "type": "string"
+        },
+        "match_columns": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Match Columns",
+          "type": "array"
+        },
+        "output_column": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Column"
+        },
+        "raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw"
+        },
+        "return_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Return Columns",
+          "type": "array"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "function",
+        "match_columns",
+        "output_column",
+        "raw",
+        "return_columns",
+        "table"
+      ],
+      "title": "LookupRef",
+      "type": "object"
+    },
+    "ObjectKind": {
+      "enum": [
+        "job",
+        "workflow",
+        "dataflow"
+      ],
+      "title": "ObjectKind",
+      "type": "string"
+    },
+    "SortKey": {
+      "properties": {
+        "direction": {
+          "default": "asc",
+          "title": "Direction",
+          "type": "string"
+        },
+        "expression": {
+          "title": "Expression",
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "expression"
+      ],
+      "title": "SortKey",
+      "type": "object"
+    },
+    "TableRef": {
+      "properties": {
+        "datastore": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datastore"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "table": {
+          "title": "Table",
+          "type": "string"
+        }
+      },
+      "required": [
+        "datastore",
+        "owner",
+        "table"
+      ],
+      "title": "TableRef",
+      "type": "object"
+    },
+    "Transform": {
+      "properties": {
+        "branches": {
+          "items": {
+            "$ref": "#/$defs/Branch"
+          },
+          "title": "Branches",
+          "type": "array"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ColumnMapping"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "group_by": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Group By",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "joins": {
+          "items": {
+            "$ref": "#/$defs/Join"
+          },
+          "title": "Joins",
+          "type": "array"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "lookups": {
+          "items": {
+            "$ref": "#/$defs/LookupRef"
+          },
+          "title": "Lookups",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "options": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "object"
+        },
+        "order_by": {
+          "items": {
+            "$ref": "#/$defs/SortKey"
+          },
+          "title": "Order By",
+          "type": "array"
+        },
+        "raw_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Tag"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Where"
+        }
+      },
+      "required": [
+        "branches",
+        "columns",
+        "group_by",
+        "inputs",
+        "joins",
+        "kind",
+        "lookups",
+        "name",
+        "options",
+        "order_by",
+        "raw_tag",
+        "table",
+        "where"
+      ],
+      "title": "Transform",
+      "type": "object"
+    },
+    "Variable": {
+      "properties": {
+        "data_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Type"
+        },
+        "default": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "scope": {
+          "default": "global",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data_type",
+        "default",
+        "name",
+        "scope"
+      ],
+      "title": "Variable",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "ir_version": {
+      "default": "0.2.0",
+      "title": "Ir Version",
+      "type": "string"
+    },
+    "objects": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EtlObject"
+      },
+      "title": "Objects",
+      "type": "object"
+    },
+    "source_tool": {
+      "title": "Source Tool",
+      "type": "string"
+    },
+    "source_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Version"
+    },
+    "unparsed": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unparsed",
+      "type": "array"
+    }
+  },
+  "required": [
+    "ir_version",
+    "objects",
+    "source_tool",
+    "source_version",
+    "unparsed"
+  ],
+  "title": "Estate",
+  "type": "object"
+}

@@ -1,6 +1,13 @@
 # Design: static web viewer (`viewer/`)
 
-Status: PLAN (revised 2026-11-09: must read raw export files, not only JSON), awaiting approval. Author: Claude for Kishore Tenneti, 2026-11-09.
+Status: IMPLEMENTED 2026-11-09. Differences from this plan, decided while building:
+- React 19 (current) instead of 18; Pyodide 314.0.7 (Python 3.14).
+- Pyodide and pydantic are self-hosted from the build, not loaded from a CDN, so the
+  default build already works offline. networkx ships as a wheel because Pyodide's
+  networkx package pulls in numpy and matplotlib.
+- The bridge lives in the package (`deltabound/bridge.py`) so pytest covers it.
+- Python runs in a Web Worker so the page stays responsive.
+- Lineage edges and their owning boxes come from Python; TypeScript only walks edges. Author: Claude for Kishore Tenneti, 2026-11-09.
 
 ## Goal
 

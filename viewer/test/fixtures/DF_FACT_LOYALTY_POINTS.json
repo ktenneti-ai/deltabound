@@ -1,0 +1,228 @@
+{
+ "dataflow": {
+  "calls": [],
+  "description": null,
+  "kind": "dataflow",
+  "name": "DF_FACT_LOYALTY_POINTS",
+  "scripts": [],
+  "transforms": [
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [],
+    "joins": [],
+    "kind": "table_source",
+    "lookups": [],
+    "name": "STG_LOYALTY_TXN",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIDatabaseTableSource",
+    "table": {
+     "datastore": "DS_DWH",
+     "owner": "STG",
+     "table": "STG_LOYALTY_TXN"
+    },
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [
+     {
+      "column": "TXN_ID",
+      "data_type": "varchar(20)",
+      "expression": "STG_LOYALTY_TXN.TXN_ID",
+      "source_columns": [
+       "STG_LOYALTY_TXN.TXN_ID"
+      ]
+     },
+     {
+      "column": "MEMBER_ID",
+      "data_type": "varchar(12)",
+      "expression": "STG_LOYALTY_TXN.MEMBER_ID",
+      "source_columns": [
+       "STG_LOYALTY_TXN.MEMBER_ID"
+      ]
+     },
+     {
+      "column": "TXN_DATE",
+      "data_type": "date",
+      "expression": "STG_LOYALTY_TXN.TXN_DATE",
+      "source_columns": [
+       "STG_LOYALTY_TXN.TXN_DATE"
+      ]
+     },
+     {
+      "column": "POINTS",
+      "data_type": "int",
+      "expression": "STG_LOYALTY_TXN.POINTS * $G_POINTS_RATE",
+      "source_columns": [
+       "STG_LOYALTY_TXN.POINTS"
+      ]
+     }
+    ],
+    "group_by": [],
+    "inputs": [
+     "STG_LOYALTY_TXN"
+    ],
+    "joins": [],
+    "kind": "query",
+    "lookups": [],
+    "name": "Q_TXN",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIQuery",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [
+     "Q_TXN"
+    ],
+    "joins": [],
+    "kind": "lookup",
+    "lookups": [
+     {
+      "function": "lookup_transform",
+      "match_columns": [
+       [
+        "MEMBER_ID",
+        "Q_TXN.MEMBER_ID"
+       ]
+      ],
+      "output_column": null,
+      "raw": null,
+      "return_columns": [
+       "MEMBER_KEY"
+      ],
+      "table": {
+       "datastore": "DS_DWH",
+       "owner": "MART",
+       "table": "DIM_LOYALTY_MEMBER"
+      }
+     }
+    ],
+    "name": "LKP_MEMBER_KEY",
+    "options": {
+     "cachePolicy": "PRE_LOAD_CACHE"
+    },
+    "order_by": [],
+    "raw_tag": "DILookup",
+    "table": {
+     "datastore": "DS_DWH",
+     "owner": "MART",
+     "table": "DIM_LOYALTY_MEMBER"
+    },
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [
+     "LKP_MEMBER_KEY"
+    ],
+    "joins": [],
+    "kind": "table_target",
+    "lookups": [],
+    "name": "FACT_LOYALTY_POINTS",
+    "options": {
+     "loadMode": "append"
+    },
+    "order_by": [],
+    "raw_tag": "DIDatabaseTableTarget",
+    "table": {
+     "datastore": "DS_DWH",
+     "owner": "MART",
+     "table": "FACT_LOYALTY_POINTS"
+    },
+    "where": null
+   }
+  ],
+  "variables": []
+ },
+ "lineage": {
+  "edges": [
+   [
+    "Q_TXN.TXN_ID",
+    "LKP_MEMBER_KEY.TXN_ID"
+   ],
+   [
+    "STG_LOYALTY_TXN.TXN_ID",
+    "Q_TXN.TXN_ID"
+   ],
+   [
+    "Q_TXN.MEMBER_ID",
+    "LKP_MEMBER_KEY.MEMBER_ID"
+   ],
+   [
+    "STG_LOYALTY_TXN.MEMBER_ID",
+    "Q_TXN.MEMBER_ID"
+   ],
+   [
+    "Q_TXN.TXN_DATE",
+    "LKP_MEMBER_KEY.TXN_DATE"
+   ],
+   [
+    "STG_LOYALTY_TXN.TXN_DATE",
+    "Q_TXN.TXN_DATE"
+   ],
+   [
+    "Q_TXN.POINTS",
+    "LKP_MEMBER_KEY.POINTS"
+   ],
+   [
+    "STG_LOYALTY_TXN.POINTS",
+    "Q_TXN.POINTS"
+   ],
+   [
+    "LKP_MEMBER_KEY.TXN_ID",
+    "DS_DWH.MART.FACT_LOYALTY_POINTS.TXN_ID"
+   ],
+   [
+    "LKP_MEMBER_KEY.MEMBER_ID",
+    "DS_DWH.MART.FACT_LOYALTY_POINTS.MEMBER_ID"
+   ],
+   [
+    "LKP_MEMBER_KEY.TXN_DATE",
+    "DS_DWH.MART.FACT_LOYALTY_POINTS.TXN_DATE"
+   ],
+   [
+    "LKP_MEMBER_KEY.POINTS",
+    "DS_DWH.MART.FACT_LOYALTY_POINTS.POINTS"
+   ],
+   [
+    "DS_DWH.MART.DIM_LOYALTY_MEMBER.MEMBER_KEY",
+    "LKP_MEMBER_KEY.MEMBER_KEY"
+   ],
+   [
+    "LKP_MEMBER_KEY.MEMBER_KEY",
+    "DS_DWH.MART.FACT_LOYALTY_POINTS.MEMBER_KEY"
+   ]
+  ],
+  "owner": {
+   "DS_DWH.MART.DIM_LOYALTY_MEMBER.MEMBER_KEY": "lookup:DS_DWH.MART.DIM_LOYALTY_MEMBER",
+   "DS_DWH.MART.FACT_LOYALTY_POINTS.MEMBER_ID": "transform:FACT_LOYALTY_POINTS",
+   "DS_DWH.MART.FACT_LOYALTY_POINTS.MEMBER_KEY": "transform:FACT_LOYALTY_POINTS",
+   "DS_DWH.MART.FACT_LOYALTY_POINTS.POINTS": "transform:FACT_LOYALTY_POINTS",
+   "DS_DWH.MART.FACT_LOYALTY_POINTS.TXN_DATE": "transform:FACT_LOYALTY_POINTS",
+   "DS_DWH.MART.FACT_LOYALTY_POINTS.TXN_ID": "transform:FACT_LOYALTY_POINTS",
+   "LKP_MEMBER_KEY.MEMBER_ID": "transform:LKP_MEMBER_KEY",
+   "LKP_MEMBER_KEY.MEMBER_KEY": "transform:LKP_MEMBER_KEY",
+   "LKP_MEMBER_KEY.POINTS": "transform:LKP_MEMBER_KEY",
+   "LKP_MEMBER_KEY.TXN_DATE": "transform:LKP_MEMBER_KEY",
+   "LKP_MEMBER_KEY.TXN_ID": "transform:LKP_MEMBER_KEY",
+   "Q_TXN.MEMBER_ID": "transform:Q_TXN",
+   "Q_TXN.POINTS": "transform:Q_TXN",
+   "Q_TXN.TXN_DATE": "transform:Q_TXN",
+   "Q_TXN.TXN_ID": "transform:Q_TXN",
+   "STG_LOYALTY_TXN.MEMBER_ID": "transform:STG_LOYALTY_TXN",
+   "STG_LOYALTY_TXN.POINTS": "transform:STG_LOYALTY_TXN",
+   "STG_LOYALTY_TXN.TXN_DATE": "transform:STG_LOYALTY_TXN",
+   "STG_LOYALTY_TXN.TXN_ID": "transform:STG_LOYALTY_TXN"
+  }
+ }
+}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -69,6 +70,22 @@ def cmd_report(a) -> None:
     print(f"Wrote {a.out}")
 
 
+def schema_json() -> str:
+    """JSON Schema of the IR as serialised (model_dump always writes every field, defaults included)."""
+    from .ir import Estate
+
+    schema = Estate.model_json_schema(mode="serialization")
+    for obj in [schema, *schema.get("$defs", {}).values()]:
+        if "properties" in obj:
+            obj["required"] = sorted(obj["properties"])
+    return json.dumps(schema, indent=2, sort_keys=True) + "\n"
+
+
+def cmd_schema(a) -> None:
+    Path(a.out).write_text(schema_json())
+    print(f"Wrote {a.out}")
+
+
 def cmd_explain(a) -> None:
     from .explain import Explainer, ExplainError, explainable_jobs, load_config
     from .explain.render import render_text
@@ -129,6 +146,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--dry-run", action="store_true", help="write the prompts to disk, send nothing")
     s.add_argument("--bundle", help="write all explanations to one JSON file (for the viewer)")
     s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
+
+    sc = sub.add_parser("schema", help="write the IR JSON Schema (used by the viewer's TypeScript types)")
+    sc.add_argument("--out", default="ir.schema.json")
+    sc.set_defaults(fn=cmd_schema)
 
     a = p.parse_args(argv)
     a.fn(a)

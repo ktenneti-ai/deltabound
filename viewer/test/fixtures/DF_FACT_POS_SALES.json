@@ -1,0 +1,757 @@
+{
+ "dataflow": {
+  "calls": [],
+  "description": "Split POS sales by channel, apply channel rules, merge back",
+  "kind": "dataflow",
+  "name": "DF_FACT_POS_SALES",
+  "scripts": [],
+  "transforms": [
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [],
+    "joins": [],
+    "kind": "table_source",
+    "lookups": [],
+    "name": "STG_POS_TXN",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIDatabaseTableSource",
+    "table": {
+     "datastore": "DS_DWH",
+     "owner": "STG",
+     "table": "STG_POS_TXN"
+    },
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [
+     {
+      "column": "TXN_ID",
+      "data_type": "varchar(20)",
+      "expression": "STG_POS_TXN.TXN_ID",
+      "source_columns": [
+       "STG_POS_TXN.TXN_ID"
+      ]
+     },
+     {
+      "column": "STORE_CODE",
+      "data_type": "varchar(4)",
+      "expression": "STG_POS_TXN.STORE_CODE",
+      "source_columns": [
+       "STG_POS_TXN.STORE_CODE"
+      ]
+     },
+     {
+      "column": "PRODUCT_ID",
+      "data_type": "varchar(18)",
+      "expression": "STG_POS_TXN.PRODUCT_ID",
+      "source_columns": [
+       "STG_POS_TXN.PRODUCT_ID"
+      ]
+     },
+     {
+      "column": "QTY",
+      "data_type": "decimal(13,3)",
+      "expression": "STG_POS_TXN.QTY",
+      "source_columns": [
+       "STG_POS_TXN.QTY"
+      ]
+     },
+     {
+      "column": "AMOUNT",
+      "data_type": "decimal(15,2)",
+      "expression": "STG_POS_TXN.AMOUNT",
+      "source_columns": [
+       "STG_POS_TXN.AMOUNT"
+      ]
+     },
+     {
+      "column": "CHANNEL",
+      "data_type": "varchar(10)",
+      "expression": "STG_POS_TXN.CHANNEL",
+      "source_columns": [
+       "STG_POS_TXN.CHANNEL"
+      ]
+     }
+    ],
+    "group_by": [],
+    "inputs": [
+     "STG_POS_TXN"
+    ],
+    "joins": [],
+    "kind": "query",
+    "lookups": [],
+    "name": "Q_POS_IN",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIQuery",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [
+     {
+      "condition": "Q_POS_IN.CHANNEL = 'STORE'",
+      "is_default": false,
+      "name": "CH_STORE"
+     },
+     {
+      "condition": "Q_POS_IN.CHANNEL = 'KIOSK'",
+      "is_default": false,
+      "name": "CH_KIOSK"
+     },
+     {
+      "condition": null,
+      "is_default": true,
+      "name": "CH_OTHER"
+     }
+    ],
+    "columns": [],
+    "group_by": [],
+    "inputs": [
+     "Q_POS_IN"
+    ],
+    "joins": [],
+    "kind": "case",
+    "lookups": [],
+    "name": "CASE_CHANNEL",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DICase",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [
+     {
+      "column": "TXN_ID",
+      "data_type": "varchar(20)",
+      "expression": "CH_STORE.TXN_ID",
+      "source_columns": [
+       "CH_STORE.TXN_ID"
+      ]
+     },
+     {
+      "column": "STORE_KEY",
+      "data_type": "int",
+      "expression": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_STORE.STORE_CODE)",
+      "source_columns": [
+       "DS_DWH.MART.DIM_STORE.STORE_KEY",
+       "CH_STORE.STORE_CODE"
+      ]
+     },
+     {
+      "column": "PRODUCT_ID",
+      "data_type": "varchar(18)",
+      "expression": "CH_STORE.PRODUCT_ID",
+      "source_columns": [
+       "CH_STORE.PRODUCT_ID"
+      ]
+     },
+     {
+      "column": "QTY",
+      "data_type": "decimal(13,3)",
+      "expression": "CH_STORE.QTY",
+      "source_columns": [
+       "CH_STORE.QTY"
+      ]
+     },
+     {
+      "column": "AMOUNT",
+      "data_type": "decimal(15,2)",
+      "expression": "CH_STORE.AMOUNT",
+      "source_columns": [
+       "CH_STORE.AMOUNT"
+      ]
+     },
+     {
+      "column": "CHANNEL",
+      "data_type": "varchar(10)",
+      "expression": "'STORE'",
+      "source_columns": []
+     }
+    ],
+    "group_by": [],
+    "inputs": [
+     "CH_STORE"
+    ],
+    "joins": [],
+    "kind": "query",
+    "lookups": [
+     {
+      "function": "lookup",
+      "match_columns": [
+       [
+        "STORE_CODE",
+        "CH_STORE.STORE_CODE"
+       ]
+      ],
+      "output_column": "STORE_KEY",
+      "raw": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_STORE.STORE_CODE)",
+      "return_columns": [
+       "STORE_KEY"
+      ],
+      "table": {
+       "datastore": "DS_DWH",
+       "owner": "MART",
+       "table": "DIM_STORE"
+      }
+     }
+    ],
+    "name": "Q_STORE",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIQuery",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [
+     {
+      "column": "TXN_ID",
+      "data_type": "varchar(20)",
+      "expression": "CH_KIOSK.TXN_ID",
+      "source_columns": [
+       "CH_KIOSK.TXN_ID"
+      ]
+     },
+     {
+      "column": "STORE_KEY",
+      "data_type": "int",
+      "expression": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_KIOSK.STORE_CODE)",
+      "source_columns": [
+       "DS_DWH.MART.DIM_STORE.STORE_KEY",
+       "CH_KIOSK.STORE_CODE"
+      ]
+     },
+     {
+      "column": "PRODUCT_ID",
+      "data_type": "varchar(18)",
+      "expression": "CH_KIOSK.PRODUCT_ID",
+      "source_columns": [
+       "CH_KIOSK.PRODUCT_ID"
+      ]
+     },
+     {
+      "column": "QTY",
+      "data_type": "decimal(13,3)",
+      "expression": "CH_KIOSK.QTY",
+      "source_columns": [
+       "CH_KIOSK.QTY"
+      ]
+     },
+     {
+      "column": "AMOUNT",
+      "data_type": "decimal(15,2)",
+      "expression": "CH_KIOSK.AMOUNT * 0.98",
+      "source_columns": [
+       "CH_KIOSK.AMOUNT"
+      ]
+     },
+     {
+      "column": "CHANNEL",
+      "data_type": "varchar(10)",
+      "expression": "'KIOSK'",
+      "source_columns": []
+     }
+    ],
+    "group_by": [],
+    "inputs": [
+     "CH_KIOSK"
+    ],
+    "joins": [],
+    "kind": "query",
+    "lookups": [
+     {
+      "function": "lookup",
+      "match_columns": [
+       [
+        "STORE_CODE",
+        "CH_KIOSK.STORE_CODE"
+       ]
+      ],
+      "output_column": "STORE_KEY",
+      "raw": "lookup(DS_DWH.MART.DIM_STORE, STORE_KEY, -1, 'PRE_LOAD_CACHE', STORE_CODE, CH_KIOSK.STORE_CODE)",
+      "return_columns": [
+       "STORE_KEY"
+      ],
+      "table": {
+       "datastore": "DS_DWH",
+       "owner": "MART",
+       "table": "DIM_STORE"
+      }
+     }
+    ],
+    "name": "Q_KIOSK",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIQuery",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [
+     {
+      "column": "TXN_ID",
+      "data_type": "varchar(20)",
+      "expression": "CH_OTHER.TXN_ID",
+      "source_columns": [
+       "CH_OTHER.TXN_ID"
+      ]
+     },
+     {
+      "column": "STORE_KEY",
+      "data_type": "int",
+      "expression": "-1",
+      "source_columns": []
+     },
+     {
+      "column": "PRODUCT_ID",
+      "data_type": "varchar(18)",
+      "expression": "CH_OTHER.PRODUCT_ID",
+      "source_columns": [
+       "CH_OTHER.PRODUCT_ID"
+      ]
+     },
+     {
+      "column": "QTY",
+      "data_type": "decimal(13,3)",
+      "expression": "CH_OTHER.QTY",
+      "source_columns": [
+       "CH_OTHER.QTY"
+      ]
+     },
+     {
+      "column": "AMOUNT",
+      "data_type": "decimal(15,2)",
+      "expression": "CH_OTHER.AMOUNT",
+      "source_columns": [
+       "CH_OTHER.AMOUNT"
+      ]
+     },
+     {
+      "column": "CHANNEL",
+      "data_type": "varchar(10)",
+      "expression": "'OTHER'",
+      "source_columns": []
+     }
+    ],
+    "group_by": [],
+    "inputs": [
+     "CH_OTHER"
+    ],
+    "joins": [],
+    "kind": "query",
+    "lookups": [],
+    "name": "Q_OTHER",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIQuery",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [
+     "Q_STORE",
+     "Q_KIOSK",
+     "Q_OTHER"
+    ],
+    "joins": [],
+    "kind": "merge",
+    "lookups": [],
+    "name": "MRG_CHANNELS",
+    "options": {},
+    "order_by": [],
+    "raw_tag": "DIMerge",
+    "table": null,
+    "where": null
+   },
+   {
+    "branches": [],
+    "columns": [],
+    "group_by": [],
+    "inputs": [
+     "MRG_CHANNELS"
+    ],
+    "joins": [],
+    "kind": "table_target",
+    "lookups": [],
+    "name": "FACT_POS_SALES",
+    "options": {
+     "loadMode": "append"
+    },
+    "order_by": [],
+    "raw_tag": "DIDatabaseTableTarget",
+    "table": {
+     "datastore": "DS_DWH",
+     "owner": "MART",
+     "table": "FACT_POS_SALES"
+    },
+    "where": null
+   }
+  ],
+  "variables": []
+ },
+ "lineage": {
+  "edges": [
+   [
+    "Q_POS_IN.TXN_ID",
+    "CASE_CHANNEL.TXN_ID"
+   ],
+   [
+    "STG_POS_TXN.TXN_ID",
+    "Q_POS_IN.TXN_ID"
+   ],
+   [
+    "Q_POS_IN.STORE_CODE",
+    "CASE_CHANNEL.STORE_CODE"
+   ],
+   [
+    "STG_POS_TXN.STORE_CODE",
+    "Q_POS_IN.STORE_CODE"
+   ],
+   [
+    "Q_POS_IN.PRODUCT_ID",
+    "CASE_CHANNEL.PRODUCT_ID"
+   ],
+   [
+    "STG_POS_TXN.PRODUCT_ID",
+    "Q_POS_IN.PRODUCT_ID"
+   ],
+   [
+    "Q_POS_IN.QTY",
+    "CASE_CHANNEL.QTY"
+   ],
+   [
+    "STG_POS_TXN.QTY",
+    "Q_POS_IN.QTY"
+   ],
+   [
+    "Q_POS_IN.AMOUNT",
+    "CASE_CHANNEL.AMOUNT"
+   ],
+   [
+    "STG_POS_TXN.AMOUNT",
+    "Q_POS_IN.AMOUNT"
+   ],
+   [
+    "Q_POS_IN.CHANNEL",
+    "CASE_CHANNEL.CHANNEL"
+   ],
+   [
+    "STG_POS_TXN.CHANNEL",
+    "Q_POS_IN.CHANNEL"
+   ],
+   [
+    "CASE_CHANNEL.TXN_ID",
+    "CH_STORE.TXN_ID"
+   ],
+   [
+    "CASE_CHANNEL.TXN_ID",
+    "CH_KIOSK.TXN_ID"
+   ],
+   [
+    "CASE_CHANNEL.TXN_ID",
+    "CH_OTHER.TXN_ID"
+   ],
+   [
+    "CASE_CHANNEL.STORE_CODE",
+    "CH_STORE.STORE_CODE"
+   ],
+   [
+    "CASE_CHANNEL.STORE_CODE",
+    "CH_KIOSK.STORE_CODE"
+   ],
+   [
+    "CASE_CHANNEL.STORE_CODE",
+    "CH_OTHER.STORE_CODE"
+   ],
+   [
+    "CASE_CHANNEL.PRODUCT_ID",
+    "CH_STORE.PRODUCT_ID"
+   ],
+   [
+    "CASE_CHANNEL.PRODUCT_ID",
+    "CH_KIOSK.PRODUCT_ID"
+   ],
+   [
+    "CASE_CHANNEL.PRODUCT_ID",
+    "CH_OTHER.PRODUCT_ID"
+   ],
+   [
+    "CASE_CHANNEL.QTY",
+    "CH_STORE.QTY"
+   ],
+   [
+    "CASE_CHANNEL.QTY",
+    "CH_KIOSK.QTY"
+   ],
+   [
+    "CASE_CHANNEL.QTY",
+    "CH_OTHER.QTY"
+   ],
+   [
+    "CASE_CHANNEL.AMOUNT",
+    "CH_STORE.AMOUNT"
+   ],
+   [
+    "CASE_CHANNEL.AMOUNT",
+    "CH_KIOSK.AMOUNT"
+   ],
+   [
+    "CASE_CHANNEL.AMOUNT",
+    "CH_OTHER.AMOUNT"
+   ],
+   [
+    "CASE_CHANNEL.CHANNEL",
+    "CH_STORE.CHANNEL"
+   ],
+   [
+    "CASE_CHANNEL.CHANNEL",
+    "CH_KIOSK.CHANNEL"
+   ],
+   [
+    "CASE_CHANNEL.CHANNEL",
+    "CH_OTHER.CHANNEL"
+   ],
+   [
+    "CH_STORE.TXN_ID",
+    "Q_STORE.TXN_ID"
+   ],
+   [
+    "CH_STORE.STORE_CODE",
+    "Q_STORE.STORE_KEY"
+   ],
+   [
+    "CH_STORE.PRODUCT_ID",
+    "Q_STORE.PRODUCT_ID"
+   ],
+   [
+    "CH_STORE.QTY",
+    "Q_STORE.QTY"
+   ],
+   [
+    "CH_STORE.AMOUNT",
+    "Q_STORE.AMOUNT"
+   ],
+   [
+    "CH_KIOSK.TXN_ID",
+    "Q_KIOSK.TXN_ID"
+   ],
+   [
+    "CH_KIOSK.STORE_CODE",
+    "Q_KIOSK.STORE_KEY"
+   ],
+   [
+    "CH_KIOSK.PRODUCT_ID",
+    "Q_KIOSK.PRODUCT_ID"
+   ],
+   [
+    "CH_KIOSK.QTY",
+    "Q_KIOSK.QTY"
+   ],
+   [
+    "CH_KIOSK.AMOUNT",
+    "Q_KIOSK.AMOUNT"
+   ],
+   [
+    "CH_OTHER.TXN_ID",
+    "Q_OTHER.TXN_ID"
+   ],
+   [
+    "CH_OTHER.PRODUCT_ID",
+    "Q_OTHER.PRODUCT_ID"
+   ],
+   [
+    "CH_OTHER.QTY",
+    "Q_OTHER.QTY"
+   ],
+   [
+    "CH_OTHER.AMOUNT",
+    "Q_OTHER.AMOUNT"
+   ],
+   [
+    "Q_STORE.TXN_ID",
+    "MRG_CHANNELS.TXN_ID"
+   ],
+   [
+    "Q_STORE.STORE_KEY",
+    "MRG_CHANNELS.STORE_KEY"
+   ],
+   [
+    "DS_DWH.MART.DIM_STORE.STORE_KEY",
+    "Q_STORE.STORE_KEY"
+   ],
+   [
+    "DS_DWH.MART.DIM_STORE.STORE_KEY",
+    "Q_KIOSK.STORE_KEY"
+   ],
+   [
+    "Q_STORE.PRODUCT_ID",
+    "MRG_CHANNELS.PRODUCT_ID"
+   ],
+   [
+    "Q_STORE.QTY",
+    "MRG_CHANNELS.QTY"
+   ],
+   [
+    "Q_STORE.AMOUNT",
+    "MRG_CHANNELS.AMOUNT"
+   ],
+   [
+    "Q_STORE.CHANNEL",
+    "MRG_CHANNELS.CHANNEL"
+   ],
+   [
+    "Q_KIOSK.TXN_ID",
+    "MRG_CHANNELS.TXN_ID"
+   ],
+   [
+    "Q_KIOSK.STORE_KEY",
+    "MRG_CHANNELS.STORE_KEY"
+   ],
+   [
+    "Q_KIOSK.PRODUCT_ID",
+    "MRG_CHANNELS.PRODUCT_ID"
+   ],
+   [
+    "Q_KIOSK.QTY",
+    "MRG_CHANNELS.QTY"
+   ],
+   [
+    "Q_KIOSK.AMOUNT",
+    "MRG_CHANNELS.AMOUNT"
+   ],
+   [
+    "Q_KIOSK.CHANNEL",
+    "MRG_CHANNELS.CHANNEL"
+   ],
+   [
+    "Q_OTHER.TXN_ID",
+    "MRG_CHANNELS.TXN_ID"
+   ],
+   [
+    "Q_OTHER.STORE_KEY",
+    "MRG_CHANNELS.STORE_KEY"
+   ],
+   [
+    "Q_OTHER.PRODUCT_ID",
+    "MRG_CHANNELS.PRODUCT_ID"
+   ],
+   [
+    "Q_OTHER.QTY",
+    "MRG_CHANNELS.QTY"
+   ],
+   [
+    "Q_OTHER.AMOUNT",
+    "MRG_CHANNELS.AMOUNT"
+   ],
+   [
+    "Q_OTHER.CHANNEL",
+    "MRG_CHANNELS.CHANNEL"
+   ],
+   [
+    "MRG_CHANNELS.TXN_ID",
+    "DS_DWH.MART.FACT_POS_SALES.TXN_ID"
+   ],
+   [
+    "MRG_CHANNELS.STORE_KEY",
+    "DS_DWH.MART.FACT_POS_SALES.STORE_KEY"
+   ],
+   [
+    "MRG_CHANNELS.PRODUCT_ID",
+    "DS_DWH.MART.FACT_POS_SALES.PRODUCT_ID"
+   ],
+   [
+    "MRG_CHANNELS.QTY",
+    "DS_DWH.MART.FACT_POS_SALES.QTY"
+   ],
+   [
+    "MRG_CHANNELS.AMOUNT",
+    "DS_DWH.MART.FACT_POS_SALES.AMOUNT"
+   ],
+   [
+    "MRG_CHANNELS.CHANNEL",
+    "DS_DWH.MART.FACT_POS_SALES.CHANNEL"
+   ]
+  ],
+  "owner": {
+   "CASE_CHANNEL.AMOUNT": "transform:CASE_CHANNEL",
+   "CASE_CHANNEL.CHANNEL": "transform:CASE_CHANNEL",
+   "CASE_CHANNEL.PRODUCT_ID": "transform:CASE_CHANNEL",
+   "CASE_CHANNEL.QTY": "transform:CASE_CHANNEL",
+   "CASE_CHANNEL.STORE_CODE": "transform:CASE_CHANNEL",
+   "CASE_CHANNEL.TXN_ID": "transform:CASE_CHANNEL",
+   "CH_KIOSK.AMOUNT": "transform:CASE_CHANNEL",
+   "CH_KIOSK.CHANNEL": "transform:CASE_CHANNEL",
+   "CH_KIOSK.PRODUCT_ID": "transform:CASE_CHANNEL",
+   "CH_KIOSK.QTY": "transform:CASE_CHANNEL",
+   "CH_KIOSK.STORE_CODE": "transform:CASE_CHANNEL",
+   "CH_KIOSK.TXN_ID": "transform:CASE_CHANNEL",
+   "CH_OTHER.AMOUNT": "transform:CASE_CHANNEL",
+   "CH_OTHER.CHANNEL": "transform:CASE_CHANNEL",
+   "CH_OTHER.PRODUCT_ID": "transform:CASE_CHANNEL",
+   "CH_OTHER.QTY": "transform:CASE_CHANNEL",
+   "CH_OTHER.STORE_CODE": "transform:CASE_CHANNEL",
+   "CH_OTHER.TXN_ID": "transform:CASE_CHANNEL",
+   "CH_STORE.AMOUNT": "transform:CASE_CHANNEL",
+   "CH_STORE.CHANNEL": "transform:CASE_CHANNEL",
+   "CH_STORE.PRODUCT_ID": "transform:CASE_CHANNEL",
+   "CH_STORE.QTY": "transform:CASE_CHANNEL",
+   "CH_STORE.STORE_CODE": "transform:CASE_CHANNEL",
+   "CH_STORE.TXN_ID": "transform:CASE_CHANNEL",
+   "DS_DWH.MART.DIM_STORE.STORE_KEY": "lookup:DS_DWH.MART.DIM_STORE",
+   "DS_DWH.MART.FACT_POS_SALES.AMOUNT": "transform:FACT_POS_SALES",
+   "DS_DWH.MART.FACT_POS_SALES.CHANNEL": "transform:FACT_POS_SALES",
+   "DS_DWH.MART.FACT_POS_SALES.PRODUCT_ID": "transform:FACT_POS_SALES",
+   "DS_DWH.MART.FACT_POS_SALES.QTY": "transform:FACT_POS_SALES",
+   "DS_DWH.MART.FACT_POS_SALES.STORE_KEY": "transform:FACT_POS_SALES",
+   "DS_DWH.MART.FACT_POS_SALES.TXN_ID": "transform:FACT_POS_SALES",
+   "MRG_CHANNELS.AMOUNT": "transform:MRG_CHANNELS",
+   "MRG_CHANNELS.CHANNEL": "transform:MRG_CHANNELS",
+   "MRG_CHANNELS.PRODUCT_ID": "transform:MRG_CHANNELS",
+   "MRG_CHANNELS.QTY": "transform:MRG_CHANNELS",
+   "MRG_CHANNELS.STORE_KEY": "transform:MRG_CHANNELS",
+   "MRG_CHANNELS.TXN_ID": "transform:MRG_CHANNELS",
+   "Q_KIOSK.AMOUNT": "transform:Q_KIOSK",
+   "Q_KIOSK.CHANNEL": "transform:Q_KIOSK",
+   "Q_KIOSK.PRODUCT_ID": "transform:Q_KIOSK",
+   "Q_KIOSK.QTY": "transform:Q_KIOSK",
+   "Q_KIOSK.STORE_KEY": "transform:Q_KIOSK",
+   "Q_KIOSK.TXN_ID": "transform:Q_KIOSK",
+   "Q_OTHER.AMOUNT": "transform:Q_OTHER",
+   "Q_OTHER.CHANNEL": "transform:Q_OTHER",
+   "Q_OTHER.PRODUCT_ID": "transform:Q_OTHER",
+   "Q_OTHER.QTY": "transform:Q_OTHER",
+   "Q_OTHER.STORE_KEY": "transform:Q_OTHER",
+   "Q_OTHER.TXN_ID": "transform:Q_OTHER",
+   "Q_POS_IN.AMOUNT": "transform:Q_POS_IN",
+   "Q_POS_IN.CHANNEL": "transform:Q_POS_IN",
+   "Q_POS_IN.PRODUCT_ID": "transform:Q_POS_IN",
+   "Q_POS_IN.QTY": "transform:Q_POS_IN",
+   "Q_POS_IN.STORE_CODE": "transform:Q_POS_IN",
+   "Q_POS_IN.TXN_ID": "transform:Q_POS_IN",
+   "Q_STORE.AMOUNT": "transform:Q_STORE",
+   "Q_STORE.CHANNEL": "transform:Q_STORE",
+   "Q_STORE.PRODUCT_ID": "transform:Q_STORE",
+   "Q_STORE.QTY": "transform:Q_STORE",
+   "Q_STORE.STORE_KEY": "transform:Q_STORE",
+   "Q_STORE.TXN_ID": "transform:Q_STORE",
+   "STG_POS_TXN.AMOUNT": "transform:STG_POS_TXN",
+   "STG_POS_TXN.CHANNEL": "transform:STG_POS_TXN",
+   "STG_POS_TXN.PRODUCT_ID": "transform:STG_POS_TXN",
+   "STG_POS_TXN.QTY": "transform:STG_POS_TXN",
+   "STG_POS_TXN.STORE_CODE": "transform:STG_POS_TXN",
+   "STG_POS_TXN.TXN_ID": "transform:STG_POS_TXN"
+  }
+ }
+}
