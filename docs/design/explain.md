@@ -1,7 +1,7 @@
 # Design: AI job explainer (`deltabound/explain/`)
 
-Status: PLAN. Provider decided 2026-11-09: Anthropic only (plus a fake provider
-for tests). Author: Claude for Kishore Tenneti, 2026-11-09.
+Status: IMPLEMENTED 2026-11-09 (except the viewer integration, which comes with the
+viewer). Provider: Anthropic only, plus a fake provider for tests. Author: Claude for Kishore Tenneti, 2026-11-09.
 
 ## Goal
 

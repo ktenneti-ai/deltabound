@@ -18,9 +18,14 @@ Python package and CLI name: `deltabound`.
   files and produce an `Estate`. They never connect to a live system.
 - `deltabound/graph.py` — analysis over the IR only. Never imports a parser.
 - `deltabound/report.py` — markdown estate report; reads the IR and graph.py only.
-- `deltabound/cli.py` — thin command-line layer over graph and report functions.
-- Future: `viewer/` (static web app reading estate.json), `explain/` (LLM summaries),
-  `convert/`, `validate/`.
+- `deltabound/explain/` — AI job explanations. Reads the IR only. Anthropic is the only
+  provider (decided 2026-11-09); `fake` is for tests and offline demos. Bump
+  `prompts.PROMPT_VERSION` whenever a prompt or schema changes (it is part of the cache key).
+  Tests must never call the network.
+- `deltabound/cli.py` — thin command-line layer over graph, report and explain functions.
+- Next: `viewer/` (Vite + React + React Flow; runs the Python parser in the browser via
+  Pyodide, approved 2026-11-09). Later: `convert/`, `validate/`. SSIS is deferred. Design
+  docs for all of these are in `docs/design/`.
 
 ## Rules
 - Unknown or unsupported elements become `opaque` transforms and are listed in
@@ -32,7 +37,7 @@ Python package and CLI name: `deltabound`.
 - The BODS tag names in `parsers/bods.py` are unverified against real exports. Keep all
   tag names in the TAG_* / TRANSFORM_KINDS constants so they are easy to correct.
 - Python 3.10+, type hints everywhere, small pure functions, minimal dependencies
-  (pydantic, networkx; ask before adding others).
+  (pydantic, networkx; optional extra `explain` = anthropic; ask before adding others).
 - Keep the README quick start working after every change.
 
 ## Current state (updated 2026-11-09)

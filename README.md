@@ -67,6 +67,43 @@ job: JOB_SALES_DAILY
 unparsed item listed), dead code and missing references, the 5 most complex
 jobs and the migration waves.
 
+## Job explanations (AI)
+
+`deltabound explain` writes a plain-English summary of a job (purpose, inputs,
+outputs, business rules) using Claude. Every claim cites the IR element it came
+from, such as `df:DF_FACT_SALES/Q_JOIN` or `call:WF_STAGE_SALES#1`. A claim with
+a citation that does not exist in the job is retried once and then dropped, never
+shown. Input and output tables come from the IR, not the model, and any the model
+leaves out are added back and marked `[from IR]`.
+
+```bash
+pip install -e ".[explain]"
+export ANTHROPIC_API_KEY=...            # or: ant auth login
+deltabound explain samples/bods --job JOB_SALES_DAILY
+deltabound explain samples/bods --all --bundle explanations.json   # one file for the viewer
+deltabound explain samples/bods --job JOB_SALES_DAILY --dry-run    # write prompts only, send nothing
+DELTABOUND_LLM_PROVIDER=fake deltabound explain samples/bods --job JOB_SALES_DAILY   # offline demo
+```
+
+- **How it runs:** each dataflow is summarised once, then the job summary is
+  built from those notes and the call tree.
+- **Cache:** results are cached in `.deltabound/explain/` and reused until the IR,
+  the model or the prompt changes. `--refresh` forces a new run.
+- **Settings:** optional, in `deltabound.toml`:
+
+  ```toml
+  [explain]
+  model = "claude-opus-5-5"   # default
+  effort = "high"             # low | medium | high | xhigh | max
+  fallbacks = true            # if the model declines, the API retries on a fallback model
+  redact_literals = false     # true replaces string/number literals before sending
+  ```
+
+  `DELTABOUND_LLM_MODEL` and `DELTABOUND_LLM_PROVIDER` override the file.
+- **Privacy:** explain sends ETL logic (table names, expressions) to Anthropic.
+  For client estates, confirm that is allowed first, and use `--dry-run` to
+  review exactly what would be sent.
+
 ## What the IR captures (v0.2.0)
 
 - Jobs, workflows and dataflows; calls with their condition and the enclosing
@@ -88,6 +125,7 @@ deltabound/
   parsers/bods.py   # SAP Data Services XML export -> IR
   graph.py          # call tree, dead code, column lineage, call depth, complexity, waves
   report.py         # markdown estate report
+  explain/          # AI job explanations with citations (Anthropic), cached
   cli.py            # command line
 samples/bods/       # SYNTHETIC estate, fictional Fernhill Retail: 15 jobs, 30 workflows, 60 dataflows
 samples/bods_mini/  # SYNTHETIC small estate used by the original tests
@@ -111,9 +149,11 @@ tests/
 
 1. Validate the parser against a real (permitted) BODS export; expand transform coverage.
 2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity.
-3. Static web graph viewer reading `estate.json`.
-4. AI explainer: per-job plain-English summaries linked to source transforms.
-5. SSIS parser to prove the IR is tool-neutral.
+3. Static web viewer reading `estate.json`, raw BODS XML and `explanations.json` (docs/design/viewer.md).
+4. Show explanations in the viewer (it loads `explanations.json`).
+5. Rule-based conversion to PySpark and Databricks Asset Bundles (docs/design/convert.md).
+6. Step-level data validation and sign-off report (docs/design/validate.md).
+7. SSIS parser (deferred; docs/design/ssis.md).
 
 ## License
 

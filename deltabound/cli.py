@@ -69,6 +69,35 @@ def cmd_report(a) -> None:
     print(f"Wrote {a.out}")
 
 
+def cmd_explain(a) -> None:
+    from .explain import Explainer, ExplainError, explainable_jobs, load_config
+    from .explain.render import render_text
+
+    e = _load(a.paths)
+    jobs = explainable_jobs(e) if a.all else [a.job]
+    unknown = [j for j in jobs if j not in e.objects or e.objects[j].kind != ObjectKind.JOB]
+    if unknown:
+        sys.exit(f"Not a job in this export: {', '.join(unknown)}")
+    try:
+        cfg = load_config(Path(a.config) if a.config else None)
+        ex = Explainer(e, cfg, dry_run=a.dry_run)
+        if a.dry_run:
+            for j in jobs:
+                ex.job(j, a.refresh)
+            print(f"Dry run: prompts written to {cfg.cache_dir}/prompts/ (nothing was sent)")
+            return
+        bundle = ex.bundle(jobs, a.refresh)
+    except ExplainError as err:
+        sys.exit(f"explain: {err}")
+    if a.bundle:
+        Path(a.bundle).write_text(bundle.model_dump_json(indent=2))
+    if not a.all:
+        print(render_text(bundle.jobs[a.job]))
+    s = ex.stats
+    print(f"{len(bundle.jobs)} job(s) explained: {s['llm_calls']} model call(s), {s['cache_hits']} cache hit(s), "
+          f"{s['retries']} citation retry(ies).{' Wrote ' + a.bundle if a.bundle else ''}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="deltabound", description="Understand legacy ETL estates.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -91,6 +120,15 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--out", default="estate_report.md")
     s.add_argument("--top", type=int, default=5, help="number of most complex jobs to list")
     s.add_argument("--wave-size", type=int, default=10)
+
+    s = add("explain", cmd_explain, "plain-English job summaries with citations (calls an LLM)")
+    which = s.add_mutually_exclusive_group(required=True)
+    which.add_argument("--job")
+    which.add_argument("--all", action="store_true", help="explain every job")
+    s.add_argument("--refresh", action="store_true", help="ignore the cache")
+    s.add_argument("--dry-run", action="store_true", help="write the prompts to disk, send nothing")
+    s.add_argument("--bundle", help="write all explanations to one JSON file (for the viewer)")
+    s.add_argument("--config", help="settings file (default: ./deltabound.toml if present)")
 
     a = p.parse_args(argv)
     a.fn(a)
