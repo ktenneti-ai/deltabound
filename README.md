@@ -18,33 +18,67 @@ Code conversion is out of scope for now. The IR is designed to feed a converter
 
 ## Quick start
 
+Requires Python 3.10+ (macOS: `brew install python@3.12`).
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q
 
 deltabound summary  samples/bods
 deltabound tree     samples/bods --job JOB_SALES_DAILY
 deltabound deadcode samples/bods
-deltabound lineage  samples/bods --dataflow DF_STG_ORDERS_DELTA --column DS_DWH.STG.STG_ORDERS.NET_AMOUNT
+deltabound lineage  samples/bods --dataflow DF_FACT_POS_SALES --column DS_DWH.MART.FACT_POS_SALES.AMOUNT
 deltabound waves    samples/bods
+deltabound report   samples/bods --out estate_report.md
 deltabound export   samples/bods --out estate.json
 ```
 
-Example output of `tree`:
+Example output of `tree` (conditions come from if/else, while loops and catch blocks):
 
 ```
 job: JOB_SALES_DAILY
-  workflow: WF_STAGE_SALES
-    dataflow: DF_STG_ORDERS_FULL   [if $G_FULL_LOAD = 'Y']
-    dataflow: DF_STG_ORDERS_DELTA   [if NOT ($G_FULL_LOAD = 'Y')]
-    dataflow: DF_STG_ORDER_ITEMS
-  workflow: WF_LOAD_MART
-    workflow: WF_DIMENSIONS
-      dataflow: DF_DIM_CUSTOMER
-      dataflow: DF_DIM_PRODUCT
-    dataflow: DF_FACT_SALES
+  workflow: WF_SALES_DAILY_MAIN
+    workflow: WF_JOB_START
+      dataflow: DF_CTL_JOB_START
+    workflow: WF_STAGE_SALES
+      dataflow: DF_STG_ORDERS_FULL   [if $G_FULL_LOAD = 'Y']
+      dataflow: DF_STG_ORDERS_DELTA   [if NOT ($G_FULL_LOAD = 'Y')]
+      dataflow: DF_STG_ORDER_ITEMS
+      dataflow: DF_STG_INVOICES
+    workflow: WF_LOAD_SALES_MART
+      workflow: WF_SHARED_DIMENSIONS
+        workflow: WF_DIM_CUSTOMER_SCD
+          dataflow: DF_STG_CUSTOMER
+          dataflow: DF_DIM_CUSTOMER
+        dataflow: DF_DIM_PRODUCT
+        dataflow: DF_DIM_STORE
+        dataflow: DF_DIM_DATE   [if day_in_month($G_LOAD_DATE) = 1]
+      workflow: WF_SALES_FACTS
+        dataflow: DF_FACT_SALES
+        dataflow: DF_FACT_INVOICE
+        dataflow: DF_AGG_SALES_DAILY   [if $G_REGION = 'ALL']
+    dataflow: DF_CTL_JOB_ERROR   [if on error (ALL)]
+    workflow: WF_JOB_END
+      dataflow: DF_CTL_JOB_END
 ```
+
+`report` writes one markdown file with object counts, parser coverage (every
+unparsed item listed), dead code and missing references, the 5 most complex
+jobs and the migration waves.
+
+## What the IR captures (v0.2.0)
+
+- Jobs, workflows and dataflows; calls with their condition and the enclosing
+  control construct (`branch`, `loop`, `error_handler`); variables, parameters, scripts.
+- Transforms with inputs, tables, column mappings and source columns, WHERE,
+  joins (type and condition), GROUP BY, ORDER BY, Case branches, Merge inputs,
+  lookups (`lookup_ext()`, `lookup()` and the Lookup transform) and tool-specific
+  attributes in `options`.
+- Column lineage follows lookups and passes through Table Comparison, History
+  Preserving, Key Generation, Case, Merge, Validation and Map Operation; it
+  stops at opaque transforms.
+- IR 0.1.0 JSON files still load (all new fields have defaults).
 
 ## Layout
 
@@ -52,9 +86,12 @@ job: JOB_SALES_DAILY
 deltabound/
   ir.py             # the open IR (Pydantic models) - the core asset
   parsers/bods.py   # SAP Data Services XML export -> IR
-  graph.py          # call tree, dead code, column lineage, complexity, waves
+  graph.py          # call tree, dead code, column lineage, call depth, complexity, waves
+  report.py         # markdown estate report
   cli.py            # command line
-samples/bods/       # SYNTHETIC sample estate (fictional retail company)
+samples/bods/       # SYNTHETIC estate, fictional Fernhill Retail: 15 jobs, 30 workflows, 60 dataflows
+samples/bods_mini/  # SYNTHETIC small estate used by the original tests
+samples/ir/         # IR files from older versions (compatibility tests)
 tests/
 ```
 
@@ -62,8 +99,10 @@ tests/
 
 - **The BODS parser is unverified against real exports.** Tag names follow the
   general shape of BODS XML exports but must be checked against real files and
-  the `TAG_*` constants adjusted. Unknown elements become `opaque` transforms
-  and are reported by `summary`, so coverage is always measurable.
+  the `TAG_*` constants adjusted. This includes the assumed layouts of joins,
+  GROUP BY/ORDER BY, Case branches, try/catch and lookup function arguments.
+  Unknown elements become `opaque` transforms and are reported by `summary`
+  and `report`, so coverage is always measurable.
 - **Never commit client or employer exports.** Use synthetic samples, files
   from design partners with written permission, or SAP trial systems whose
   license allows it.
@@ -71,7 +110,7 @@ tests/
 ## Next steps
 
 1. Validate the parser against a real (permitted) BODS export; expand transform coverage.
-2. Parse Query join conditions, Case/Merge branches, Lookup functions and custom functions.
+2. Model custom functions, Validation rules, Pivot and Data Transfer; weight joins and lookups in complexity.
 3. Static web graph viewer reading `estate.json`.
 4. AI explainer: per-job plain-English summaries linked to source transforms.
 5. SSIS parser to prove the IR is tool-neutral.

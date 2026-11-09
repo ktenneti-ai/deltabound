@@ -17,7 +17,8 @@ Python package and CLI name: `deltabound`.
 - `deltabound/parsers/<tool>.py` — one parser per legacy tool. Parsers only read export
   files and produce an `Estate`. They never connect to a live system.
 - `deltabound/graph.py` — analysis over the IR only. Never imports a parser.
-- `deltabound/cli.py` — thin command-line layer over graph functions.
+- `deltabound/report.py` — markdown estate report; reads the IR and graph.py only.
+- `deltabound/cli.py` — thin command-line layer over graph and report functions.
 - Future: `viewer/` (static web app reading estate.json), `explain/` (LLM summaries),
   `convert/`, `validate/`.
 
@@ -33,6 +34,18 @@ Python package and CLI name: `deltabound`.
 - Python 3.10+, type hints everywhere, small pure functions, minimal dependencies
   (pydantic, networkx; ask before adding others).
 - Keep the README quick start working after every change.
+
+## Current state (updated 2026-11-09)
+- IR_VERSION 0.2.0. `samples/ir/estate_v0.1.0.json` must keep loading; when bumping the IR
+  again, add an export from the previous version there.
+- `samples/bods/` is the multi-file Fernhill Retail estate (15 jobs, 30 workflows, 60
+  dataflows). `tests/test_bods_estate.py` asserts its exact counts, dead code and unparsed
+  items, so update tests when changing the sample. `samples/bods_mini/` is the original
+  small sample.
+- Environment: Python 3.12 from Homebrew in `.venv` (system python3 is 3.9, too old).
+- License: Business Source License 1.1, Licensor Kishore Tenneti, Change Date 2030-11-09,
+  Change License Apache-2.0. Production use needs the USD 25K/yr commercial license
+  (COMMERCIAL.md). Keep the BSL text unmodified apart from the Parameters block.
 
 ## How to work with me
 - Before coding a non-trivial task, give a short plan and wait for approval.
